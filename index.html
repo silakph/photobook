@@ -144,7 +144,17 @@ h1,h2{margin:0}
 .slot{position:absolute; overflow:hidden; cursor:pointer; touch-action:none}
 .slot .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#E9ECF2; color:#8A93A6; font-size:12px; font-weight:600; flex-direction:column; gap:4px; text-align:center; padding:6px}
 .slot img{position:absolute; max-width:none; user-select:none; -webkit-user-drag:none; pointer-events:none}
-.slot.sel{outline:3px solid var(--blue); outline-offset:-3px; z-index:2}
+.slot.sel{outline:3px solid var(--blue); outline-offset:-3px}
+.editing .tx.tsel{box-shadow:inset 0 0 0 2px var(--blue)}
+.editing .tx.tsel .txh{display:flex}
+.guide{position:absolute; z-index:999; pointer-events:none; background:#E5398F}
+.guide.v{top:0; bottom:0; width:1px} .guide.h{left:0; right:0; height:1px}
+.ctx .sep{width:1px; height:24px; background:var(--line)}
+.ubtn{width:36px; height:36px; border-radius:8px; border:1px solid var(--line); background:#FFFFFF; display:inline-flex; align-items:center; justify-content:center; padding:0}
+.ubtn:disabled{opacity:.35; cursor:default}
+.spread-thumb[draggable="true"]{cursor:grab}
+.spread-thumb.dropb{box-shadow:inset 0 3px 0 var(--blue)} .spread-thumb.dropa{box-shadow:inset 0 -3px 0 var(--blue)}
+.spread-thumb.dragging{opacity:.4}
 .slot.has{cursor:grab} .slot.grabbing{cursor:grabbing}
 .editing .pg.cur{outline:2px solid rgba(47,91,211,.55); outline-offset:-2px}
 .pgswitch{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; padding:10px 16px 0}
@@ -252,7 +262,11 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
     <label class="tsel"><span class="lab">PAGE SIZE</span><select id="sizeSel" aria-label="Page size"></select></label>
     <span class="cust" id="customSize" hidden=""><input id="cw" type="number" min="3" max="20" step="0.25" aria-label="Width in inches" placeholder="W"> × <input id="ch" type="number" min="3" max="20" step="0.25" aria-label="Height in inches" placeholder="H"> in</span>
     <span class="lab" id="sizeLabel" style="font-size:12.5px; color:var(--soft); font-weight:600"></span>
-    <span class="saved" id="saved" role="status">Saved</span>
+    <span style="display:inline-flex; gap:6px; margin-left:auto">
+      <button class="ubtn" type="button" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled=""><svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4L3 8l4 4"/><path d="M3 8h9a5 5 0 0 1 0 10H8"/></svg></button>
+      <button class="ubtn" type="button" id="redoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled=""><svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4l4 4-4 4"/><path d="M17 8H8a5 5 0 0 0 0 10h4"/></svg></button>
+    </span>
+    <span class="saved" id="saved" role="status" style="margin-left:0">Saved</span>
     <button class="btn" type="button" id="previewBtn">Preview book</button>
     <button class="btn dark" type="button" id="pdfBtn">
       <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#FFFFFF" stroke-width="1.8"><path d="M8 2v8M4.5 7L8 10.5 11.5 7M3 13h10"></path></svg>Download PDF</button>
@@ -270,6 +284,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
         <span style="width:12px"></span>
         <button class="btn small" type="button" id="moveLeft" title="Move these pages earlier">← Move</button>
         <button class="btn small" type="button" id="moveRight" title="Move these pages later">Move →</button>
+        <button class="btn small" type="button" id="dupSpread">Duplicate these pages</button>
         <button class="btn small danger" type="button" id="delSpread">Delete these pages</button>
       </div>
     </main>
@@ -581,6 +596,59 @@ function setSlotRect(page, si, r){
   else if (page.extraSlots && page.extraSlots[si - n]) page.extraSlots[si - n].rect = r;
 }
 const isExtraSlot = (page, si) => si >= layoutCount(page);
+// stable keys for front/back order: layout frames "s<i>", added frames "e<id>", text "t:<role>"
+function slotKey(page, si){ const n = layoutCount(page); return si < n ? "s" + si : "e" + (((page.extraSlots || [])[si - n] || {}).id || si); }
+function paintOrder(page, G){
+  const z = page.z || {};
+  const items = [...G.slots.map((r, si) => ({ kind: "s", si, key: slotKey(page, si), dz: si })), ...G.texts.map((t, i) => ({ kind: "t", t, key: "t:" + t.role, dz: 1000 + i }))];
+  items.forEach(it => { it.z = z[it.key] ?? it.dz; });
+  return items.sort((a, b) => (a.z - b.z) || (a.dz - b.dz));
+}
+function arrange(page, key, front){
+  const zs = paintOrder(page, pageGeom(page)).map(i => i.z);
+  page.z = page.z || {}; page.z[key] = front ? Math.max(...zs) + 1 : Math.min(...zs) - 1;
+}
+function duplicateSlot(pi, si){
+  const page = D().pages[pi], r = pageGeom(page).slots[si], sd = slotAt(page, si) || {};
+  page.extraSlots = page.extraSlots || [];
+  page.extraSlots.push({ id: uid(), rect: { ...r, x: r.x + .25, y: r.y + .25 }, photo: sd.photo || null, cx: sd.cx ?? .5, cy: sd.cy ?? .5, zoom: sd.zoom || 1 });
+  sel = { p: pi, s: layoutCount(page) + page.extraSlots.length - 1 }; changed();
+}
+function duplicateText(pi, role){
+  const page = D().pages[pi], t = pageGeom(page).texts.find(x => x.role === role); if (!t) return;
+  const key = "x" + uid().slice(0, 6), ex = (page.extraTexts || []).find(e => e.key === role);
+  page.extraTexts = page.extraTexts || [];
+  const look = textLook(pi, page, t);
+  page.extraTexts.push({ key, kind: ex ? ex.kind : (role === "title" ? "heading" : "text"), size: t.size, align: t.align });
+  page.textPos = page.textPos || {}; page.textPos[key] = { ...t.rect, x: t.rect.x + .25, y: t.rect.y + .25 };
+  page.style = page.style || {};
+  page.style[key] = { ...JSON.parse(JSON.stringify(page.style[role] || {})), font: look.family, bold: look.boldOn, italic: look.italic, size: look.size, color: look.color };
+  page.texts[key] = page.texts[role] || "";
+  sel = { p: pi, s: -1, t: key }; changed();
+}
+// snapping: page edges, centre and margins, plus the edges and centres of the other items on the page
+function snapRect(page, r, kind, selfKey, ppi){
+  const W = D().size.w, H = D().size.h, m = pageTheme(page).margin, G = pageGeom(page);
+  const xs = [0, W / 2, W, m, W - m], ys = [0, H / 2, H, m, H - m];
+  G.slots.forEach((q, si) => { if (slotKey(page, si) === selfKey) return; xs.push(q.x, q.x + q.w / 2, q.x + q.w); ys.push(q.y, q.y + q.h / 2, q.y + q.h); });
+  G.texts.forEach(t => { if ("t:" + t.role === selfKey) return; const q = t.rect; xs.push(q.x, q.x + q.w / 2, q.x + q.w); ys.push(q.y, q.y + q.h / 2, q.y + q.h); });
+  const thr = 7 / ppi, out = { ...r }, gx = [], gy = [];
+  const best = (cands, targets) => { let bd = null; cands.forEach(c => targets.forEach(tv => { const d = tv - c; if (Math.abs(d) <= thr && (!bd || Math.abs(d) < Math.abs(bd.d))) bd = { d, t: tv }; })); return bd; };
+  if (kind === "mv") {
+    const bx = best([r.x, r.x + r.w / 2, r.x + r.w], xs); if (bx) { out.x += bx.d; gx.push(bx.t); }
+    const by = best([r.y, r.y + r.h / 2, r.y + r.h], ys); if (by) { out.y += by.d; gy.push(by.t); }
+  } else {
+    const bx = best([r.x + r.w], xs); if (bx) { out.w += bx.d; gx.push(bx.t); }
+    const by = best([r.y + r.h], ys); if (by) { out.h += by.d; gy.push(by.t); }
+  }
+  return { r: out, gx, gy };
+}
+function showGuides(pgEl, gx, gy, ppi){
+  if (!pgEl) return;
+  pgEl.querySelectorAll(".guide").forEach(g => g.remove());
+  gx.forEach(x => pgEl.insertAdjacentHTML("beforeend", `<div class="guide v" style="left:${x * ppi}px"></div>`));
+  gy.forEach(y => pgEl.insertAdjacentHTML("beforeend", `<div class="guide h" style="top:${y * ppi}px"></div>`));
+}
 // restyle the text on the open spread without redrawing the photos
 function refreshTexts(pi){
   const el = document.querySelector(`#spread .pg[data-pi="${pi}"]`), page = D().pages[pi]; if (!el || !page) return;
@@ -811,6 +879,7 @@ async function openBook(id){
   show("editor");
   $("bookTitle").value = BOOK.title;
   setSaved("ok");
+  resetHistory();
   await fontsReady();
   renderAll();
 }
@@ -823,7 +892,29 @@ function setSaved(state, text){
   el.className = "saved" + (state === "pending" ? " pending" : state === "bad" ? " bad" : "");
   el.textContent = text || (state === "pending" ? "Saving…" : state === "bad" ? "Not saved" : "Saved");
 }
-function queueSave(){ setSaved("pending"); clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 900); }
+function queueSave(){ setSaved("pending"); clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 900); noteChange(); }
+// ---- undo / redo: snapshots of the book, a burst of changes (typing, a slider drag) counts as one step ----
+const UNDO = [], REDO = []; let lastSnap = null, snapTimer = null, restoring = false;
+const snapOf = () => JSON.stringify(BOOK.data);
+function resetHistory(){ UNDO.length = 0; REDO.length = 0; lastSnap = snapOf(); updateUndoBtns(); }
+function noteChange(){ if (restoring || lastSnap === null) return; clearTimeout(snapTimer); snapTimer = setTimeout(commitSnap, 350); }
+function commitSnap(){
+  clearTimeout(snapTimer); snapTimer = null;
+  const now = snapOf(); if (now === lastSnap) return;
+  UNDO.push(lastSnap); if (UNDO.length > 80) UNDO.shift(); REDO.length = 0; lastSnap = now; updateUndoBtns();
+}
+function restoreSnap(json){
+  const keep = BOOK.data.photos, d = JSON.parse(json);
+  d.photos = { ...(d.photos || {}), ...keep }; // never lose an uploaded photo
+  BOOK.data = d; lastSnap = snapOf();
+  restoring = true; sel = null; spreadIdx = clamp(spreadIdx, 0, spreads().length - 1); changed(); restoring = false;
+  updateUndoBtns();
+}
+function undo(){ commitSnap(); if (!UNDO.length) return; REDO.push(lastSnap); restoreSnap(UNDO.pop()); }
+function redo(){ commitSnap(); if (!REDO.length) return; UNDO.push(lastSnap); restoreSnap(REDO.pop()); }
+function updateUndoBtns(){ $("undoBtn").disabled = !UNDO.length; $("redoBtn").disabled = !REDO.length; }
+$("undoBtn").addEventListener("click", undo);
+$("redoBtn").addEventListener("click", redo);
 async function doSave(){
   if (saving) { dirtyAgain = true; return; }
   saving = true; dirtyAgain = false;
@@ -883,10 +974,11 @@ function renderPage(pi, ppi, mode){
     el.addEventListener("drop", e => { el.classList.remove("bgdrop"); if (e.target.closest(".slot")) return; e.preventDefault(); const id = e.dataTransfer.getData("text/x-photo"); if (id && D().photos[id]) setBg(pi, id); });
   }
   const G = pageGeom(page);
+  const rank = {}; paintOrder(page, G).forEach((it, i) => { rank[it.key] = 10 + i; });
   if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H));
   G.slots.forEach((r, si) => {
     const slot = slotAt(page, si), s = document.createElement("div");
-    s.className = "slot"; s.dataset.p = pi; s.dataset.s = si;
+    s.className = "slot"; s.dataset.p = pi; s.dataset.s = si; s.style.zIndex = rank[slotKey(page, si)];
     let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
     if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
       inset = th.frame.width;
@@ -915,7 +1007,8 @@ function renderPage(pi, ppi, mode){
     el.appendChild(s);
   });
   G.texts.forEach(t => {
-    const box = document.createElement("div"); box.className = "tx"; box.dataset.role = t.role;
+    const box = document.createElement("div"); box.className = "tx"; box.dataset.role = t.role; box.style.zIndex = rank["t:" + t.role];
+    if (mode === "edit" && sel && sel.p === pi && sel.t === t.role) box.classList.add("tsel");
     Object.assign(box.style, { left: t.rect.x * ppi + "px", top: t.rect.y * ppi + "px", width: t.rect.w * ppi + "px", height: t.rect.h * ppi + "px" });
     styleTextBox(box, textLook(pi, page, t), ppi);
     const tx = document.createElement("div"); tx.dataset.ph = TEXT_PH[t.role] || "Add text"; tx.textContent = page.texts[t.role] || "";
@@ -925,7 +1018,7 @@ function renderPage(pi, ppi, mode){
       tx.setAttribute("role", "textbox"); tx.setAttribute("aria-label", `${(TEXT_PH[t.role] || "Add text").replace("Add ", "")} on ${pageLabel(pi)}`);
       tx.addEventListener("input", () => { page.texts[t.role] = tx.innerText.replace(/\n$/, ""); queueSave(); syncTextFields(); });
       tx.addEventListener("blur", () => renderSpreadList());
-      tx.addEventListener("focus", () => { sel = { p: pi, s: -1 }; markSelected(); renderPanels(); });
+      tx.addEventListener("focus", () => { sel = { p: pi, s: -1, t: t.role }; markSelected(); renderPanels(); });
     }
     box.appendChild(tx); el.appendChild(box);
     if (mode === "edit") addTextHandles(box, pi, page, t, ppi);
@@ -941,17 +1034,19 @@ function addTextHandles(box, pi, page, t, ppi){
     e.preventDefault(); e.stopPropagation();
     const W = D().size.w, H = D().size.h, r0 = { ...t.rect }, sx = e.clientX, sy = e.clientY;
     try { h.setPointerCapture(e.pointerId); } catch {}
-    sel = { p: pi, s: -1 }; markSelected(); box.classList.add("moving");
+    sel = { p: pi, s: -1, t: t.role }; if (document.activeElement && document.activeElement.isContentEditable) document.activeElement.blur(); markSelected(); box.classList.add("moving");
+    const pgEl = box.closest(".pg");
     const move = ev => {
-      const dx = (ev.clientX - sx) / ppi, dy = (ev.clientY - sy) / ppi, r = { ...r0 };
+      const dx = (ev.clientX - sx) / ppi, dy = (ev.clientY - sy) / ppi; let r = { ...r0 };
       if (kind === "mv") { r.x = clamp(r0.x + dx, -r0.w * .5, W - r0.w * .5); r.y = clamp(r0.y + dy, -r0.h * .5, H - r0.h * .5); }
       else { r.w = clamp(r0.w + dx, .4, W + 1 - r0.x); r.h = clamp(r0.h + dy, .25, H + 1 - r0.y); }
+      if (!ev.altKey) { const sn = snapRect(page, r, kind, "t:" + t.role, ppi); r = sn.r; showGuides(pgEl, sn.gx, sn.gy, ppi); } else showGuides(pgEl, [], [], ppi);
       page.textPos = page.textPos || {}; page.textPos[t.role] = r;
       Object.assign(box.style, { left: r.x * ppi + "px", top: r.y * ppi + "px", width: r.w * ppi + "px", height: r.h * ppi + "px" });
     };
     const up = () => {
       h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up);
-      box.classList.remove("moving"); t.rect = page.textPos && page.textPos[t.role] ? { ...page.textPos[t.role] } : t.rect;
+      box.classList.remove("moving"); showGuides(pgEl, [], [], ppi); t.rect = page.textPos && page.textPos[t.role] ? { ...page.textPos[t.role] } : t.rect;
       queueSave(); renderSpreadList(); renderPanels();
     };
     h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
@@ -971,14 +1066,17 @@ function addFrameHandles(s, pi, si, rect, ppi){
       const W = D().size.w, H = D().size.h, r0 = { ...rect }, sx = e.clientX, sy = e.clientY;
       try { h.setPointerCapture(e.pointerId); } catch {}
       let r = { ...r0 };
+      const pgEl = s.closest(".pg"), key = slotKey(page, si);
       const move = ev => {
         const dx = (ev.clientX - sx) / ppi, dy = (ev.clientY - sy) / ppi; r = { ...r0 };
         if (kind === "mv") { r.x = clamp(r0.x + dx, -r0.w * .5, W - r0.w * .5); r.y = clamp(r0.y + dy, -r0.h * .5, H - r0.h * .5); }
         else { r.w = clamp(r0.w + dx, .3, W + 1 - r0.x); r.h = clamp(r0.h + dy, .3, H + 1 - r0.y); }
+        if (!ev.altKey) { const sn = snapRect(page, r, kind, key, ppi); r = sn.r; showGuides(pgEl, sn.gx, sn.gy, ppi); } else showGuides(pgEl, [], [], ppi);
         Object.assign(s.style, { left: r.x * ppi + "px", top: r.y * ppi + "px", width: r.w * ppi + "px", height: r.h * ppi + "px" });
       };
       const up = () => {
         h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up);
+        showGuides(pgEl, [], [], ppi);
         if (r.x !== r0.x || r.y !== r0.y || r.w !== r0.w || r.h !== r0.h) { setSlotRect(page, si, r); sel = { p: pi, s: si }; changed(); }
       };
       h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
@@ -1081,7 +1179,7 @@ const hasBg = page => !!(page && page.bg && page.bg.photo && D().photos[page.bg.
 function bgLayer(page, base, W, H, ppi){
   const bg = page.bg, ph = D().photos[bg.photo], blurIn = (bg.blur || 0) * BG_MAX_BLUR, m = blurIn * 2;
   const box = document.createElement("div"); box.className = "bgph";
-  box.style.cssText = "position:absolute; inset:0; overflow:hidden; pointer-events:none";
+  box.style.cssText = "position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:1";
   // the photo is drawn a little larger than the page so the blur doesn't fade at the edges
   const c = crop(ph, (W + 2 * m) * ppi, (H + 2 * m) * ppi, bg);
   const img = document.createElement("img"); img.alt = "";
@@ -1174,7 +1272,7 @@ function decoShapes(kind, W, H){
 // a four-point sparkle
 const starPts = s => [[0, -1], [.22, -.22], [1, 0], [.22, .22], [0, 1], [-.22, .22], [-1, 0], [-.22, -.22]].map(([a, b]) => [s.x + a * s.r, s.y + b * s.r]);
 function decoSVG(kind, W, H){
-  return `<svg aria-hidden="true" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">${
+  return `<svg aria-hidden="true" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:2">${
     decoShapes(kind, W, H).map(s => s.t === "line" ? `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.c}" stroke-width="${s.w}"/>`
       : s.t === "rect" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.c}"/>`
       : s.t === "frame" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${s.c}" stroke-width="${s.w2}"/>`
@@ -1196,6 +1294,7 @@ function renderStage(){
   $("spreadLabel").textContent = isCoverPage(sp[0]) ? spreadName(sp) : `Pages ${spreadName(sp)} of ${insideCount()}`;
   $("prevSpread").disabled = spreadIdx === 0; $("nextSpread").disabled = spreadIdx === sps.length - 1;
   const inside = !isCoverPage(sp[0]);
+  $("dupSpread").disabled = !inside;
   $("moveLeft").disabled = !inside || spreadIdx <= 1; $("moveRight").disabled = !inside || spreadIdx >= sps.length - 1 || isCoverPage(sps[spreadIdx + 1][0]); $("delSpread").disabled = !inside;
   renderCtx(); renderPageSwitch();
   const cur = currentPageIdx();
@@ -1203,6 +1302,7 @@ function renderStage(){
 }
 function markSelected(){
   document.querySelectorAll("#spread .slot").forEach(s => s.classList.toggle("sel", !!sel && +s.dataset.p === sel.p && +s.dataset.s === sel.s));
+  document.querySelectorAll("#spread .pg").forEach(pg => pg.querySelectorAll(".tx").forEach(tx => tx.classList.toggle("tsel", !!sel && !!sel.t && +pg.dataset.pi === sel.p && tx.dataset.role === sel.t)));
   const cur = currentPageIdx();
   document.querySelectorAll("#spread .pg").forEach(pg => pg.classList.toggle("cur", pg.dataset.pi !== undefined && +pg.dataset.pi === cur && spreads()[spreadIdx].length > 1));
   renderCtx(); renderPageSwitch();
@@ -1272,21 +1372,42 @@ function putPhoto(pi, si, id){
 }
 
 // contextual bar above the spread
+function arrangeBar(kind){
+  return `<span class="sep"></span><button class="btn small" type="button" id="cxDup">Duplicate</button>
+    <button class="btn small" type="button" id="cxFront" title="Bring to front">Front</button><button class="btn small" type="button" id="cxBack" title="Send to back">Back</button>`;
+}
+function wireArrange(page, key, dup){
+  $("cxDup").onclick = dup;
+  $("cxFront").onclick = () => { arrange(page, key, true); changed(); };
+  $("cxBack").onclick = () => { arrange(page, key, false); changed(); };
+}
 function renderCtx(){
   const box = $("ctx");
   const slot = sel && sel.s >= 0 && D().pages[sel.p] && slotAt(D().pages[sel.p], sel.s);
+  if (!slot && sel && sel.t && D().pages[sel.p] && pageGeom(D().pages[sel.p]).texts.some(t => t.role === sel.t)) {
+    const page = D().pages[sel.p], role = sel.t, extra = (page.extraTexts || []).some(e => e.key === role);
+    box.innerHTML = `<span class="hint">Text box: drag its blue handles, or use the arrow keys (Shift for bigger steps).</span>${arrangeBar()}${extra ? '<button class="btn small" type="button" id="cxDelText">Delete</button>' : ""}`;
+    wireArrange(page, "t:" + role, () => duplicateText(sel.p, role));
+    if ($("cxDelText")) $("cxDelText").onclick = () => { sel = null; deleteExtraText(page, role); };
+    return;
+  }
   if (!slot) {
     const pg = sel && D().pages[sel.p];
     box.innerHTML = hasBg(pg) ? `<span class="hint">Drag an empty part of the page to move the background photo. Zoom and blur are in <b>Background</b>.</span>`
       : `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`;
     return;
   }
-  if (!slot.photo) { box.innerHTML = `<span class="hint">Frame selected: tap a photo in <b>Photos</b>, or drag one here. Use the blue handles to move or resize it.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>${isExtraSlot(D().pages[sel.p], sel.s) ? '<button class="btn small" type="button" id="cxDelFrame">Delete frame</button>' : ""}`;
-    if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteExtraSlot(D().pages[sel.p], sel.s);
+  const pageS = D().pages[sel.p], keyS = slotKey(pageS, sel.s), siS = sel.s, piS = sel.p;
+  const delBtn = isExtraSlot(pageS, sel.s) ? '<button class="btn small" type="button" id="cxDelFrame">Delete frame</button>' : "";
+  if (!slot.photo) { box.innerHTML = `<span class="hint">Empty frame: tap a photo in <b>Photos</b> or drag one here.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>${arrangeBar()}${delBtn}`;
+    if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteExtraSlot(pageS, siS);
+    wireArrange(pageS, keyS, () => duplicateSlot(piS, siS));
     $("cxPhotos").onclick = () => showTab("photos"); return; }
   box.innerHTML = `<span class="hint">Drag the photo to move it. Zoom in for more room to move.</span>
     <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600">Zoom <input type="range" id="cxZoom" min="1" max="3" step="0.01" value="${slot.zoom || 1}"></label>
-    <button class="btn small" type="button" id="cxFit">Fit</button><button class="btn small" type="button" id="cxReplace">Replace</button><button class="btn small" type="button" id="cxRemove">Remove</button>`;
+    <button class="btn small" type="button" id="cxFit">Fit</button><button class="btn small" type="button" id="cxReplace">Replace</button><button class="btn small" type="button" id="cxRemove">Remove photo</button>${arrangeBar()}${delBtn}`;
+  wireArrange(pageS, keyS, () => duplicateSlot(piS, siS));
+  if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteExtraSlot(pageS, siS);
   $("cxZoom").oninput = e => {
     slot.zoom = +e.target.value;
     const s = document.querySelector(`#spread .slot[data-p="${sel.p}"][data-s="${sel.s}"]`), img = s && s.querySelector("img"), inner = img && img.parentElement;
@@ -1310,6 +1431,18 @@ function renderSpreadList(){
     const lab = document.createElement("span"); lab.textContent = spreadName(sp);
     b.append(pp, lab);
     b.addEventListener("click", () => { spreadIdx = i; sel = null; renderStage(); renderSpreadList(); renderPanels(); });
+    // inside pages can be dragged to a new place in the book
+    if (!isCoverPage(sp[0]) && sp[1] !== null) {
+      b.draggable = true; b.title = "Drag to reorder";
+      b.addEventListener("dragstart", e => { e.dataTransfer.setData("text/x-spread", String(i)); e.dataTransfer.effectAllowed = "move"; b.classList.add("dragging"); });
+      b.addEventListener("dragend", () => b.classList.remove("dragging"));
+    }
+    if (!isCoverPage(sp[0])) {
+      const after = e => { const r = b.getBoundingClientRect(); return e.clientY > r.top + r.height / 2; };
+      b.addEventListener("dragover", e => { if (![...e.dataTransfer.types].includes("text/x-spread")) return; e.preventDefault(); b.classList.toggle("dropa", after(e)); b.classList.toggle("dropb", !after(e)); });
+      b.addEventListener("dragleave", () => b.classList.remove("dropa", "dropb"));
+      b.addEventListener("drop", e => { const from = +e.dataTransfer.getData("text/x-spread"); const a = after(e); b.classList.remove("dropa", "dropb"); if (!Number.isNaN(from)) { e.preventDefault(); moveSpreadTo(from, i, a); } });
+    }
     return b;
   }));
 }
@@ -1324,6 +1457,24 @@ $("addPages").addEventListener("click", () => {
 });
 $("moveLeft").addEventListener("click", () => moveSpread(-1));
 $("moveRight").addEventListener("click", () => moveSpread(1));
+function moveSpreadTo(from, to, after){
+  const p = D().pages, sps = spreads(), A = sps[from], T = sps[to];
+  if (!A || !T || from === to || isCoverPage(A[0]) || isCoverPage(T[0]) || A[1] === null) return;
+  const moving = A.filter(x => x !== null).map(i => p[i]), tFirst = p[T[0]], tLast = p[T[1] ?? T[0]];
+  p.splice(A[0], moving.length);
+  const at = after ? p.indexOf(tLast) + 1 : p.indexOf(tFirst);
+  p.splice(at, 0, ...moving);
+  spreadIdx = Math.max(0, spreads().findIndex(sp => sp.includes(p.indexOf(moving[0])))); sel = null; changed();
+}
+$("dupSpread").addEventListener("click", () => {
+  const p = D().pages, sp = spreads()[spreadIdx]; if (isCoverPage(sp[0])) return;
+  const idx = sp.filter(x => x !== null);
+  const copies = idx.map(i => { const c = JSON.parse(JSON.stringify(p[i])); c.id = uid();
+    (c.extraSlots || []).forEach(e => { const old = e.id; e.id = uid(); if (c.z && ("e" + old) in c.z) { c.z["e" + e.id] = c.z["e" + old]; delete c.z["e" + old]; } });
+    return c; });
+  p.splice(idx[idx.length - 1] + 1, 0, ...copies);
+  spreadIdx = Math.min(spreads().length - 1, spreadIdx + 1); sel = null; changed();
+});
 function moveSpread(dir){
   const sps = spreads(), a = sps[spreadIdx], b = sps[spreadIdx + dir]; if (!b || isCoverPage(b[0]) || isCoverPage(a[0])) return;
   const p = D().pages, ia = a.filter(x => x !== null), ib = b.filter(x => x !== null);
@@ -1338,6 +1489,24 @@ armed($("delSpread"), "Delete these pages", () => {
   const idx = sp.filter(x => x !== null);
   D().pages.splice(idx[0], idx.length);
   spreadIdx = Math.max(0, spreadIdx - 1); sel = null; changed();
+});
+
+// keyboard: undo/redo, arrow keys nudge the selected frame or text box, Esc deselects
+document.addEventListener("keydown", e => {
+  if ($("editor").hidden || !$("preview").hidden || document.querySelector("dialog[open]")) return;
+  const a = document.activeElement, typing = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !typing && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && !typing && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if (typing || !sel) return;
+  if (e.key === "Escape") { sel = null; markSelected(); renderPanels(); return; }
+  const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (!dir) return;
+  const page = D().pages[sel.p]; if (!page) return;
+  const step = e.shiftKey ? .25 : .05, G = pageGeom(page);
+  if (sel.s >= 0 && G.slots[sel.s]) { e.preventDefault(); const r = G.slots[sel.s]; setSlotRect(page, sel.s, { ...r, x: r.x + dir[0] * step, y: r.y + dir[1] * step }); changed(); }
+  else if (sel.t) { const t = G.texts.find(x => x.role === sel.t); if (!t) return; e.preventDefault();
+    page.textPos = page.textPos || {}; page.textPos[sel.t] = { ...t.rect, x: t.rect.x + dir[0] * step, y: t.rect.y + dir[1] * step }; changed(); }
 });
 
 // ---- right: tool panels ----
@@ -1361,7 +1530,7 @@ function renderPanels(){
       const G = geom(key, W, H, { ...THEMES.classic, margin: .7, gap: .3 });
       G.slots.forEach(r => b.insertAdjacentHTML("beforeend", `<i style="left:${r.x / W * 100}%; top:${r.y / H * 100}%; width:${r.w / W * 100}%; height:${r.h / H * 100}%"></i>`));
       G.texts.forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
-      b.addEventListener("click", () => { page.layout = key; delete page.slotPos; if (page.textPos) Object.keys(page.textPos).forEach(k => { if (!/^x/.test(k)) delete page.textPos[k]; }); sel = null; changed(); });
+      b.addEventListener("click", () => { page.layout = key; delete page.slotPos; if (page.z) Object.keys(page.z).forEach(k => { if (/^s\d/.test(k)) delete page.z[k]; }); if (page.textPos) Object.keys(page.textPos).forEach(k => { if (!/^x/.test(k)) delete page.textPos[k]; }); sel = null; changed(); });
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
@@ -1683,7 +1852,7 @@ async function drawPage(pi, o){
   if (hasBg(page)) await drawBgPhoto(ctx, page.bg, pageBg(pi, page), W, H, b, X, dpi);
   const G = pageGeom(page);
   if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
-  for (const [si, r0] of G.slots.entries()) {
+  const drawSlot = async (si, r0) => {
     const slot = slotAt(page, si) || {};
     // frames that touch the trim edge run into the bleed
     const r = { ...r0 }, e = .001;
@@ -1700,7 +1869,7 @@ async function drawPage(pi, o){
       ctx.fillRect(X(r.x), X(r.y), r.w * dpi, r.h * dpi);
       ctx.restore();
     }
-    if (!slot.photo || !d.photos[slot.photo]) continue;
+    if (!slot.photo || !d.photos[slot.photo]) return;
     const ph = d.photos[slot.photo], iw = r.w - 2 * inset, ih = r.h - 2 * inset;
     // crop is computed on the visible (trim) frame so the PDF matches the editor; bleed adds a little extra around it
     const vis = { w: r0.w - 2 * inset, h: r0.h - 2 * inset };
@@ -1714,9 +1883,9 @@ async function drawPage(pi, o){
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
     bmp.close();
-  }
-  for (const t of G.texts) {
-    let txt = (page.texts[t.role] || "").trim(); if (!txt) continue;
+  };
+  const drawText = async (t) => {
+    let txt = (page.texts[t.role] || "").trim(); if (!txt) return;
     const L = textLook(pi, page, t), size = L.size / 72 * dpi;
     if (L.upper) txt = txt.toUpperCase();
     await document.fonts.load(fontStr(L, 40)).catch(() => null);
@@ -1737,7 +1906,8 @@ async function drawPage(pi, o){
     const x = L.align === "center" ? X(t.rect.x + t.rect.w / 2) : L.align === "right" ? X(t.rect.x + t.rect.w) - insX : X(t.rect.x) + insX;
     lines.forEach(l => { ctx.fillText(l, x, y); y += lh; });
     ctx.restore();
-  }
+  };
+  for (const it of paintOrder(page, G)) { if (it.kind === "s") await drawSlot(it.si, G.slots[it.si]); else await drawText(it.t); }
   if (o.marks) drawCropMarks(ctx, W, H, X, b, sl, dpi);
   return cv;
 }
