@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='3' y='5' width='11' height='18' rx='2' fill='%231C1D21'/%3E%3Crect x='14' y='5' width='11' height='18' rx='2' fill='%232F5BD3'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;0,800;1,700&amp;family=Great+Vibes&amp;family=Lilita+One&amp;family=Cormorant+Garamond:ital,wght@0,600;1,500&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;0,800;1,700&amp;family=Great+Vibes&amp;family=Pinyon+Script&amp;family=Lilita+One&amp;family=Cormorant+Garamond:ital,wght@0,600;1,500&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
 <style>
 :root{--ink:#1C1D21; --soft:#6A6D75; --line:#E4E1DA; --bg:#F3F1EC; --card:#FFFFFF; --blue:#2F5BD3; --blue-bg:#EEF3FF; --warn:#7A5300; --warn-bg:#FFF4D6; --ok:#3B7A57; --bad:#B42318; color-scheme:only light}
 *{box-sizing:border-box}
@@ -342,12 +342,16 @@ const THEMES = {
     title: { family: "Lilita One", weight: 400, style: "normal" }, caption: { family: "Nunito", weight: 800, style: "normal" },
     body: { family: "Nunito", weight: 700, style: "normal" }, frame: { colors: ["#DA291C", "#0055BF", "#FFD100"], width: .09 }, deco: "bricks",
     sample: { bg: "#FFD100", fg: "#16181C", text: "Build!", font: "400 22px 'Lilita One'" } },
+  debut: { name: "Debut (glam blue)", bg: "#F4F6FB", coverBg: "#12306B", ink: "#12306B", coverInk: "#F3DFA8", accent: "#12306B", margin: .65, gap: .18,
+    title: { family: "Pinyon Script", weight: 400, style: "normal" }, caption: { family: "Cormorant Garamond", weight: 500, style: "italic" },
+    body: { family: "Cormorant Garamond", weight: 600, style: "normal" }, frame: { color: "#C9A54C", width: .045 }, deco: "glam",
+    sample: { bg: "#12306B", fg: "#F3DFA8", text: "Eighteen", font: "400 24px 'Pinyon Script'" } },
   fullbleed: { name: "Full-bleed", bg: "#FFFFFF", coverBg: "#14161B", ink: "#1C1D21", coverInk: "#FFFFFF", accent: "#1C1D21", margin: .35, gap: .08,
     title: { family: "Cormorant Garamond", weight: 500, style: "italic" }, caption: { family: "Cormorant Garamond", weight: 500, style: "italic" },
     body: { family: "Nunito", weight: 600, style: "normal" }, frame: null, deco: null, overCover: true,
     sample: { bg: "#8F9BAE", fg: "#FFFFFF", text: "Summer", font: "italic 500 24px 'Cormorant Garamond'" } }
 };
-const FONT_LOADS = ["800 20px 'Playfair Display'", "italic 700 20px 'Playfair Display'", "400 20px 'Great Vibes'", "400 20px 'Lilita One'",
+const FONT_LOADS = ["800 20px 'Playfair Display'", "italic 700 20px 'Playfair Display'", "400 20px 'Great Vibes'", "400 20px 'Lilita One'", "400 20px 'Pinyon Script'",
   "italic 500 20px 'Cormorant Garamond'", "600 20px 'Nunito'", "700 20px 'Nunito'", "800 20px 'Nunito'"];
 const fontsReady = () => Promise.all(FONT_LOADS.map(f => document.fonts.load(f).catch(() => null)));
 
@@ -404,6 +408,9 @@ const TEMPLATES = [
   { key: "year", name: "Family year", theme: "classic", size: "11x8.5", title: "Our Year",
     desc: "A month-by-month keepsake: a page or two for each part of the year.",
     pages: ["text", "one", "four", "two", "three", "six", "photoText", "four", "two", "one", "three", "six"] },
+  { key: "debut", name: "Debut", theme: "debut", size: "10x10", title: "Eighteen",
+    desc: "A glamorous blue-and-gold keepsake: the grand entrance, the 18 roses and candles, family and friends.",
+    pages: ["full", "photoText", "four", "one", "six", "three", "photoText", "six", "two", "full", "four", "text"] },
   { key: "travel", name: "Travel", theme: "fullbleed", size: "10x10", title: "Summer by the sea",
     desc: "Edge-to-edge scenery with smaller pages for the little moments.",
     pages: ["full", "two", "full", "four", "photoText", "full", "three", "six", "full", "text"] }
@@ -700,16 +707,26 @@ function decoShapes(kind, W, H){
       out.push({ t: "rect", x: x - .07 * k, y: len - .02 * k, w: .14 * k, h: .1 * k, c: "#C9A227" });
       out.push({ t: "circle", x, y: len + .08 * k + r, r, c: cols[i] });
     });
+  } else if (kind === "glam") {
+    out.push({ t: "frame", x: .26 * k, y: .26 * k, w: W - .52 * k, h: H - .52 * k, c: "#C9A54C", w2: .025 * k });
+    out.push({ t: "frame", x: .36 * k, y: .36 * k, w: W - .72 * k, h: H - .72 * k, c: "#C9A54C", w2: .01 * k });
+    [[.14, .11, .11], [.86, .09, .14], [.93, .2, .07], [.08, .9, .12], [.9, .88, .09], [.2, .06, .06], [.78, .95, .06]]
+      .forEach(([fx, fy, r]) => out.push({ t: "star", x: W * fx, y: H * fy, r: r * k, c: "#E7C873" }));
   } else if (kind === "bricks") {
     out.push({ t: "rect", x: 0, y: 0, w: W, h: .42 * k, c: "#0055BF" });
     ["#DA291C", "#FFD100", "#0055BF", "#DA291C", "#FFD100"].forEach((c, i) => out.push({ t: "rect", x: W * (.08 + i * .19), y: .42 * k, w: W * .14, h: .1 * k, c }));
   }
   return out;
 }
+// a four-point sparkle
+const starPts = s => [[0, -1], [.22, -.22], [1, 0], [.22, .22], [0, 1], [-.22, .22], [-1, 0], [-.22, -.22]].map(([a, b]) => [s.x + a * s.r, s.y + b * s.r]);
 function decoSVG(kind, W, H){
   return `<svg aria-hidden="true" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">${
     decoShapes(kind, W, H).map(s => s.t === "line" ? `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.c}" stroke-width="${s.w}"/>`
-      : s.t === "rect" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.c}"/>` : `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.c}"/>`).join("")}</svg>`;
+      : s.t === "rect" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.c}"/>`
+      : s.t === "frame" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${s.c}" stroke-width="${s.w2}"/>`
+      : s.t === "star" ? `<path d="${starPts(s).map((q, i) => (i ? "L" : "M") + q[0] + " " + q[1]).join(" ")}Z" fill="${s.c}"/>`
+      : `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.c}"/>`).join("")}</svg>`;
 }
 
 // ---- the open spread ----
@@ -1111,6 +1128,8 @@ function drawDeco(ctx, kind, W, H, X, dpi){
     ctx.save();
     if (s.t === "line") { ctx.strokeStyle = s.c; ctx.lineWidth = s.w * dpi; ctx.beginPath(); ctx.moveTo(X(s.x1), X(s.y1) - 1); ctx.lineTo(X(s.x2), X(s.y2)); ctx.stroke(); }
     else if (s.t === "rect") { ctx.fillStyle = s.c; ctx.fillRect(X(s.x), X(s.y), s.w * dpi, s.h * dpi); }
+    else if (s.t === "frame") { ctx.strokeStyle = s.c; ctx.lineWidth = s.w2 * dpi; ctx.strokeRect(X(s.x), X(s.y), s.w * dpi, s.h * dpi); }
+    else if (s.t === "star") { ctx.fillStyle = s.c; ctx.beginPath(); starPts(s).forEach(([x, y], i) => i ? ctx.lineTo(X(x), X(y)) : ctx.moveTo(X(x), X(y))); ctx.closePath(); ctx.fill(); }
     else { ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(X(s.x), X(s.y), s.r * dpi, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
   });
