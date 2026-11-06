@@ -81,7 +81,14 @@ h1,h2{margin:0}
 .stage-nav{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center}
 .round{width:36px; height:36px; border-radius:50%; border:1px solid var(--line); background:#FFFFFF; font-size:18px; line-height:1}
 .tools{width:330px; flex:none; background:#FFFFFF; border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
-.tabs{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); flex:none}
+.tabs{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-bottom:1px solid var(--line); flex:none}
+.els{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px}
+.els button{border:1px solid var(--line); border-radius:8px; background:#FFFFFF; padding:8px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:var(--ink)}
+.els button:hover{border-color:var(--blue)}
+.els .ic{position:relative; width:44px; height:34px}
+.els .ic i{position:absolute; background:#D9DDE6; border-radius:2px}
+.el-row{display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--line); font-size:13px}
+.el-row span{flex:1}
 .tabs button{height:46px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--soft); font-weight:500}
 .tabs button[aria-selected="true"]{color:var(--ink); font-weight:700; border-bottom-color:var(--ink)}
 .panel{padding:16px; overflow-y:auto; flex:1}
@@ -147,6 +154,10 @@ h1,h2{margin:0}
 .txh.mv{left:-11px; top:-11px; cursor:move} .txh.rs{right:-11px; bottom:-11px; cursor:nwse-resize}
 .editing .tx:hover .txh, .editing .tx:focus-within .txh, .editing .tx.moving .txh{display:flex}
 .editing .tx.moving{box-shadow:inset 0 0 0 2px var(--blue)}
+.fh{position:absolute; z-index:5; width:26px; height:26px; padding:0; border-radius:6px; border:2px solid #FFFFFF; background:var(--blue); color:#FFFFFF;
+  display:none; align-items:center; justify-content:center; touch-action:none; box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.fh.mv{left:4px; top:4px; cursor:move} .fh.rs{right:4px; bottom:4px; cursor:nwse-resize}
+.editing .slot.sel .fh{display:flex}
 .editing .tx:hover{box-shadow:inset 0 0 0 1px rgba(47,91,211,.35)}
 .no-edit .tx > div:empty::before{content:none}
 .no-edit .slot .ph{background:transparent; color:transparent}
@@ -258,6 +269,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
         <button role="tab" id="t-photos" aria-selected="false" type="button">Photos</button>
         <button role="tab" id="t-layouts" aria-selected="true" type="button">Layouts</button>
         <button role="tab" id="t-text" aria-selected="false" type="button">Text</button>
+        <button role="tab" id="t-elements" aria-selected="false" type="button">Elements</button>
         <button role="tab" id="t-theme" aria-selected="false" type="button">Theme</button>
       </div>
       <div class="pgswitch" id="pgSwitch" role="group" aria-label="Which page to edit"></div>
@@ -272,6 +284,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       <div class="panel" id="p-layouts">
         <p class="note" id="layoutNote"></p>
         <div class="layouts" id="layoutGrid"></div>
+        <div class="bgctl" id="spaceCtl"></div>
         <div class="bgctl" id="bgCtl"></div>
         <div class="check" id="check"></div>
       </div>
@@ -280,6 +293,15 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
         <div id="pairBox"></div>
         <div id="textFields"></div>
 
+      </div>
+      <div class="panel" id="p-elements" hidden="">
+        <p class="note" id="elNote"></p>
+        <p class="sec-lbl">PHOTOS</p>
+        <div class="els" id="elPhotos"></div>
+        <p class="sec-lbl" style="margin-top:16px">TEXT</p>
+        <div class="els" id="elTexts"></div>
+        <p class="sec-lbl" style="margin-top:16px">ON THIS PAGE</p>
+        <div id="elList"></div>
       </div>
       <div class="panel" id="p-theme" hidden="">
         <p class="note">The theme styles every page: background, photo borders and fonts. Your photos and text stay put.</p>
@@ -518,11 +540,35 @@ function styleTextBox(box, L, ppi){
   if (L.box && L.box.bw) box.style[L.box.under ? "borderBottom" : "border"] = `${L.box.bw / 72 * ppi}px solid ${L.box.border || L.color}`;
 }
 // the layout's frames and text boxes, with any text boxes the user has moved or resized
+// the page's theme, with its own spacing and margin if set
+const pageTheme = page => ({ ...TH(), ...(page && page.gap != null ? { gap: page.gap } : {}), ...(page && page.margin != null ? { margin: page.margin } : {}) });
+const layoutCount = page => geom(page.layout, D().size.w, D().size.h, TH()).slots.length;
 function pageGeom(page){
-  const d = D(), G = geom(page.layout, d.size.w, d.size.h, TH());
+  const d = D(), G = geom(page.layout, d.size.w, d.size.h, pageTheme(page));
+  G.n = G.slots.length;
+  if (page.slotPos) G.slots = G.slots.map((r, i) => page.slotPos[i] ? { ...page.slotPos[i] } : r);
+  (page.extraSlots || []).forEach(e => G.slots.push({ ...e.rect }));
   if (page.textPos) G.texts = G.texts.map(t => page.textPos[t.role] ? { ...t, rect: { ...page.textPos[t.role] } } : t);
+  (page.extraTexts || []).forEach(e => { if (page.textPos && page.textPos[e.key]) G.texts.push({ role: e.key, rect: { ...page.textPos[e.key] }, size: e.size, align: e.align }); });
   return G;
 }
+// the photo data for frame si: layout frames live in page.slots, added frames in page.extraSlots
+function slotAt(page, si){
+  const n = layoutCount(page);
+  if (si < n) { ensureSlots(page, si + 1); return page.slots[si]; }
+  return (page.extraSlots || [])[si - n] || null;
+}
+function setSlotPhoto(page, si, data){
+  const n = layoutCount(page);
+  if (si < n) { ensureSlots(page, si + 1); page.slots[si] = data; }
+  else if (page.extraSlots && page.extraSlots[si - n]) Object.assign(page.extraSlots[si - n], data);
+}
+function setSlotRect(page, si, r){
+  const n = layoutCount(page);
+  if (si < n) { page.slotPos = page.slotPos || {}; page.slotPos[si] = r; }
+  else if (page.extraSlots && page.extraSlots[si - n]) page.extraSlots[si - n].rect = r;
+}
+const isExtraSlot = (page, si) => si >= layoutCount(page);
 // restyle the text on the open spread without redrawing the photos
 function refreshTexts(pi){
   const el = document.querySelector(`#spread .pg[data-pi="${pi}"]`), page = D().pages[pi]; if (!el || !page) return;
@@ -825,10 +871,9 @@ function renderPage(pi, ppi, mode){
     el.addEventListener("drop", e => { el.classList.remove("bgdrop"); if (e.target.closest(".slot")) return; e.preventDefault(); const id = e.dataTransfer.getData("text/x-photo"); if (id && D().photos[id]) setBg(pi, id); });
   }
   const G = pageGeom(page);
-  ensureSlots(page, G.slots.length);
   if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H));
   G.slots.forEach((r, si) => {
-    const slot = page.slots[si], s = document.createElement("div");
+    const slot = slotAt(page, si), s = document.createElement("div");
     s.className = "slot"; s.dataset.p = pi; s.dataset.s = si;
     let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
     if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
@@ -853,6 +898,7 @@ function renderPage(pi, ppi, mode){
     if (mode === "edit") {
       if (sel && sel.p === pi && sel.s === si) s.classList.add("sel");
       wireSlot(s, inner, pi, si);
+      addFrameHandles(s, pi, si, r, ppi);
     }
     el.appendChild(s);
   });
@@ -860,11 +906,11 @@ function renderPage(pi, ppi, mode){
     const box = document.createElement("div"); box.className = "tx"; box.dataset.role = t.role;
     Object.assign(box.style, { left: t.rect.x * ppi + "px", top: t.rect.y * ppi + "px", width: t.rect.w * ppi + "px", height: t.rect.h * ppi + "px" });
     styleTextBox(box, textLook(pi, page, t), ppi);
-    const tx = document.createElement("div"); tx.dataset.ph = TEXT_PH[t.role]; tx.textContent = page.texts[t.role] || "";
+    const tx = document.createElement("div"); tx.dataset.ph = TEXT_PH[t.role] || "Add text"; tx.textContent = page.texts[t.role] || "";
     if (mode === "edit") {
       try { tx.contentEditable = "plaintext-only"; } catch { tx.contentEditable = "true"; }
       if (tx.contentEditable !== "plaintext-only") tx.contentEditable = "true";
-      tx.setAttribute("role", "textbox"); tx.setAttribute("aria-label", `${TEXT_PH[t.role].replace("Add ", "")} on page ${pi}`);
+      tx.setAttribute("role", "textbox"); tx.setAttribute("aria-label", `${(TEXT_PH[t.role] || "Add text").replace("Add ", "")} on ${pageLabel(pi)}`);
       tx.addEventListener("input", () => { page.texts[t.role] = tx.innerText.replace(/\n$/, ""); queueSave(); syncTextFields(); });
       tx.addEventListener("blur", () => renderSpreadList());
       tx.addEventListener("focus", () => { sel = { p: pi, s: -1 }; markSelected(); renderPanels(); });
@@ -899,6 +945,103 @@ function addTextHandles(box, pi, page, t, ppi){
     h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
   });
   drag(mv, "mv"); drag(rs, "rs");
+}
+// move (top-left) and resize (bottom-right) handles on the selected photo frame
+function addFrameHandles(s, pi, si, rect, ppi){
+  const page = D().pages[pi];
+  const mk = (cls, label, svg) => { const h = document.createElement("button"); h.type = "button"; h.className = "fh " + cls; h.setAttribute("aria-label", label); h.innerHTML = svg; s.appendChild(h); return h; };
+  const mv = mk("mv", "Move this frame", '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 1v14M1 8h14M8 1L5.5 3.5M8 1l2.5 2.5M8 15l-2.5-2.5M8 15l2.5-2.5M1 8l2.5-2.5M1 8l2.5 2.5M15 8l-2.5-2.5M15 8l-2.5 2.5"/></svg>');
+  const rs = mk("rs", "Resize this frame", '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 6v8H6M14 14L4 4"/></svg>');
+  const drag = (h, kind) => {
+    h.addEventListener("click", e => e.stopPropagation());
+    h.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation();
+      const W = D().size.w, H = D().size.h, r0 = { ...rect }, sx = e.clientX, sy = e.clientY;
+      try { h.setPointerCapture(e.pointerId); } catch {}
+      let r = { ...r0 };
+      const move = ev => {
+        const dx = (ev.clientX - sx) / ppi, dy = (ev.clientY - sy) / ppi; r = { ...r0 };
+        if (kind === "mv") { r.x = clamp(r0.x + dx, -r0.w * .5, W - r0.w * .5); r.y = clamp(r0.y + dy, -r0.h * .5, H - r0.h * .5); }
+        else { r.w = clamp(r0.w + dx, .3, W + 1 - r0.x); r.h = clamp(r0.h + dy, .3, H + 1 - r0.y); }
+        Object.assign(s.style, { left: r.x * ppi + "px", top: r.y * ppi + "px", width: r.w * ppi + "px", height: r.h * ppi + "px" });
+      };
+      const up = () => {
+        h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up);
+        if (r.x !== r0.x || r.y !== r0.y || r.w !== r0.w || r.h !== r0.h) { setSlotRect(page, si, r); sel = { p: pi, s: si }; changed(); }
+      };
+      h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
+    });
+  };
+  drag(mv, "mv"); drag(rs, "rs");
+}
+// space between photos and page margin, per page
+function renderSpacing(pi){
+  const page = D().pages[pi], box = $("spaceCtl"); if (!page) { box.innerHTML = ""; return; }
+  const th = TH(), gap = page.gap ?? th.gap, mar = page.margin ?? th.margin;
+  box.innerHTML = `<p class="sec-lbl">SPACING</p>
+    <label class="f" for="spGap" style="margin-top:0">Space between photos <span style="font-weight:500; color:var(--soft)" id="spGapV">${gap.toFixed(2)} in</span></label>
+    <input id="spGap" type="range" min="0" max="0.8" step="0.01" value="${gap}" style="width:100%">
+    <label class="f" for="spMar">Page margin <span style="font-weight:500; color:var(--soft)" id="spMarV">${mar.toFixed(2)} in</span></label>
+    <input id="spMar" type="range" min="0" max="1.4" step="0.01" value="${mar}" style="width:100%">
+    <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap"><button class="btn small" type="button" id="spAll">Use on every page</button><button class="btn small" type="button" id="spReset">Reset</button></div>
+    ${page.slotPos ? '<p class="note" style="margin-top:8px">Frames you moved by hand keep their spot. Pick the layout again to snap them back.</p>' : ""}`;
+  $("spGap").oninput = e => { page.gap = +e.target.value; $("spGapV").textContent = (+e.target.value).toFixed(2) + " in"; queueSave(); renderStage(); };
+  $("spMar").oninput = e => { page.margin = +e.target.value; $("spMarV").textContent = (+e.target.value).toFixed(2) + " in"; queueSave(); renderStage(); };
+  $("spGap").onchange = $("spMar").onchange = () => { renderSpreadList(); renderCheck(); };
+  $("spAll").onclick = () => { D().pages.forEach(pg => { if (page.gap != null) pg.gap = page.gap; else delete pg.gap; if (page.margin != null) pg.margin = page.margin; else delete pg.margin; }); changed(); $("spAll").textContent = "Done: every page matches"; };
+  $("spReset").onclick = () => { delete page.gap; delete page.margin; changed(); };
+}
+// ---------- Elements: add frames, grids and text boxes to a page ----------
+const EL_GRIDS = [["1×1", 1, 1, "Photo frame"], ["2×1", 2, 1, "2 side by side"], ["1×2", 1, 2, "2 stacked"], ["2×2", 2, 2, "Grid 2 × 2"], ["3×2", 3, 2, "Grid 3 × 2"], ["3×3", 3, 3, "Grid 3 × 3"]];
+function addFrames(page, cols, rows){
+  const W = D().size.w, H = D().size.h, th = pageTheme(page), g = th.gap, k = (page.extraSlots || []).length % 4 * .25;
+  const single = cols * rows === 1, bw = single ? Math.min(W, H) * .42 : W * .62, bh = single ? bw : H * .62;
+  const x0 = (W - bw) / 2 + k, y0 = (H - bh) / 2 + k, w = (bw - g * (cols - 1)) / cols, h = (bh - g * (rows - 1)) / rows;
+  page.extraSlots = page.extraSlots || [];
+  const first = layoutCount(page) + page.extraSlots.length;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
+    page.extraSlots.push({ id: uid(), rect: { x: x0 + c * (w + g), y: y0 + r * (h + g), w, h }, photo: null, cx: .5, cy: .5, zoom: 1 });
+  return first;
+}
+function addTextBox(page, kind){
+  const W = D().size.w, H = D().size.h, k = Math.min(W, H) / 8, n = (page.extraTexts || []).length;
+  const key = "x" + uid().slice(0, 6), heading = kind === "heading";
+  const w = W * (heading ? .7 : .55), h = (heading ? 1 : 1.4) * k, off = (n % 4) * .3;
+  page.extraTexts = page.extraTexts || []; page.extraTexts.push({ key, kind, size: (heading ? 30 : 13) * k, align: heading ? "center" : "left" });
+  page.textPos = page.textPos || {}; page.textPos[key] = { x: (W - w) / 2 + off, y: (H - h) / 2 + off, w, h };
+  page.style = page.style || {}; if (heading) page.style[key] = { font: TH().title.family };
+  page.texts[key] = "";
+  return key;
+}
+function deleteExtraSlot(page, si){
+  const j = si - layoutCount(page); if (!page.extraSlots || !page.extraSlots[j]) return;
+  page.extraSlots.splice(j, 1); if (!page.extraSlots.length) delete page.extraSlots; sel = null; changed();
+}
+function deleteExtraText(page, key){
+  page.extraTexts = (page.extraTexts || []).filter(e => e.key !== key); if (!page.extraTexts.length) delete page.extraTexts;
+  if (page.textPos) delete page.textPos[key]; if (page.style) delete page.style[key]; delete page.texts[key]; changed();
+}
+function renderElements(pi){
+  const page = D().pages[pi]; if (!page) return;
+  $("elNote").innerHTML = `Add to <b>${pageLabel(pi)}</b>. New items land in the middle of the page: drag their blue handles to move or resize them.`;
+  const icon = (c, r) => { let html = ""; const w = 44 / c, h = 34 / r; for (let y = 0; y < r; y++) for (let x = 0; x < c; x++) html += `<i style="left:${x * w + 1}px; top:${y * h + 1}px; width:${w - 2}px; height:${h - 2}px"></i>`; return `<span class="ic">${html}</span>`; };
+  $("elPhotos").innerHTML = EL_GRIDS.map(([k, c, r, n]) => `<button type="button" data-g="${k}">${icon(c, r)}${n}</button>`).join("");
+  $("elTexts").innerHTML = `<button type="button" data-t="heading"><span class="ic" style="display:flex; align-items:center; justify-content:center; font:800 20px 'Playfair Display'">Aa</span>Heading</button>
+    <button type="button" data-t="text"><span class="ic" style="display:flex; flex-direction:column; justify-content:center; gap:4px"><i style="position:static; height:4px; width:100%"></i><i style="position:static; height:4px; width:80%"></i><i style="position:static; height:4px; width:90%"></i></span>Paragraph</button>`;
+  $("elPhotos").querySelectorAll("[data-g]").forEach(b => b.onclick = () => {
+    const [, c, r] = EL_GRIDS.find(x => x[0] === b.dataset.g); const first = addFrames(page, c, r); sel = { p: pi, s: first }; changed();
+  });
+  $("elTexts").querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+    const key = addTextBox(page, b.dataset.t); sel = { p: pi, s: -1 }; changed();
+    setTimeout(() => { const el = document.querySelector(`#spread .pg[data-pi="${pi}"] .tx[data-role="${key}"] > div`); if (el) el.focus(); }, 50);
+  });
+  const n = layoutCount(page), rows = [];
+  (page.extraSlots || []).forEach((e, j) => rows.push(`<div class="el-row"><span>Photo frame ${j + 1}${e.photo ? "" : " <span style='color:var(--soft)'>(empty)</span>"}</span><button class="btn small" type="button" data-sel="${n + j}">Select</button><button class="btn small" type="button" data-dels="${n + j}" aria-label="Delete photo frame ${j + 1}">×</button></div>`));
+  (page.extraTexts || []).forEach((e, j) => rows.push(`<div class="el-row"><span>${e.kind === "heading" ? "Heading" : "Text"}: ${esc(((page.texts[e.key] || "").trim() || "empty").slice(0, 24))}</span><button class="btn small" type="button" data-delt="${e.key}" aria-label="Delete text box ${j + 1}">×</button></div>`));
+  $("elList").innerHTML = rows.length ? rows.join("") : '<p class="note">Nothing added yet. Frames and text from the layout can be moved and resized too.</p>';
+  $("elList").querySelectorAll("[data-sel]").forEach(b => b.onclick = () => { sel = { p: pi, s: +b.dataset.sel }; markSelected(); });
+  $("elList").querySelectorAll("[data-dels]").forEach(b => b.onclick = () => deleteExtraSlot(page, +b.dataset.dels));
+  $("elList").querySelectorAll("[data-delt]").forEach(b => b.onclick = () => deleteExtraText(page, b.dataset.delt));
 }
 // ---- page background photo (blur + soften) ----
 const BG_MAX_BLUR = .4; // inches of blur at the slider's maximum
@@ -1061,7 +1204,7 @@ function wireSlot(s, inner, pi, si){
   });
   let start = null;
   s.addEventListener("pointerdown", e => {
-    const page = D().pages[pi], slot = page.slots[si], ph = slot.photo && D().photos[slot.photo];
+    const page = D().pages[pi], slot = slotAt(page, si), ph = slot && slot.photo && D().photos[slot.photo];
     if (!ph || e.button > 0) return;
     const img = inner.querySelector("img"); if (!img) return;
     e.preventDefault();
@@ -1086,13 +1229,12 @@ function wireSlot(s, inner, pi, si){
   });
 }
 function putPhoto(pi, si, id){
-  const page = D().pages[pi]; ensureSlots(page, si + 1);
-  page.slots[si] = { photo: id, cx: .5, cy: .5, zoom: 1 };
+  const page = D().pages[pi];
+  setSlotPhoto(page, si, { photo: id, cx: .5, cy: .5, zoom: 1 });
   // select the next empty frame on this spread, so tapping photos fills a page quickly
   const sp = spreads()[spreadIdx]; let next = null;
-  for (const p of sp) { if (p === null) continue; const n = geom(D().pages[p].layout, D().size.w, D().size.h, TH()).slots.length;
-    ensureSlots(D().pages[p], n);
-    for (let k = 0; k < n; k++) if (!D().pages[p].slots[k].photo) { next = { p, s: k }; break; } if (next) break; }
+  for (const p of [pi, ...sp.filter(x => x !== pi)]) { if (p === null) continue; const pg = D().pages[p], n = pageGeom(pg).slots.length; // same page first
+    for (let k = 0; k < n; k++) { const sd = slotAt(pg, k); if (sd && !sd.photo) { next = { p, s: k }; break; } } if (next) break; }
   sel = next || { p: pi, s: si };
   changed();
 }
@@ -1100,14 +1242,15 @@ function putPhoto(pi, si, id){
 // contextual bar above the spread
 function renderCtx(){
   const box = $("ctx");
-  const slot = sel && sel.s >= 0 && D().pages[sel.p] && D().pages[sel.p].slots[sel.s];
+  const slot = sel && sel.s >= 0 && D().pages[sel.p] && slotAt(D().pages[sel.p], sel.s);
   if (!slot) {
     const pg = sel && D().pages[sel.p];
     box.innerHTML = hasBg(pg) ? `<span class="hint">Drag an empty part of the page to move the background photo. Zoom and blur are in <b>Layouts</b>.</span>`
       : `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`;
     return;
   }
-  if (!slot.photo) { box.innerHTML = `<span class="hint">Frame selected: tap a photo in <b>Photos</b>, or drag one here.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>`;
+  if (!slot.photo) { box.innerHTML = `<span class="hint">Frame selected: tap a photo in <b>Photos</b>, or drag one here. Use the blue handles to move or resize it.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>${isExtraSlot(D().pages[sel.p], sel.s) ? '<button class="btn small" type="button" id="cxDelFrame">Delete frame</button>' : ""}`;
+    if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteExtraSlot(D().pages[sel.p], sel.s);
     $("cxPhotos").onclick = () => showTab("photos"); return; }
   box.innerHTML = `<span class="hint">Drag the photo to move it. Zoom in for more room to move.</span>
     <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600">Zoom <input type="range" id="cxZoom" min="1" max="3" step="0.01" value="${slot.zoom || 1}"></label>
@@ -1166,7 +1309,7 @@ armed($("delSpread"), "Delete these pages", () => {
 });
 
 // ---- right: tool panels ----
-const TABS = ["photos", "layouts", "text", "theme"];
+const TABS = ["photos", "layouts", "text", "elements", "theme"];
 function showTab(t){ TABS.forEach(x => { $("p-" + x).hidden = x !== t; $("t-" + x).setAttribute("aria-selected", x === t); }); renderPanels(); }
 TABS.forEach(t => $("t-" + t).addEventListener("click", () => showTab(t)));
 function currentPageIdx(){ const sp = spreads()[spreadIdx]; if (sel && sp.includes(sel.p)) return sel.p; return sp[0]; }
@@ -1177,7 +1320,7 @@ function renderPanels(){
     const isCover = isCoverPage(pi);
     $("layoutNote").innerHTML = `Pick a layout for <b>${pageLabel(pi)}</b>. Your photos move into the new frames.`;
     const W = 8, H = 8 * D().size.h / D().size.w;
-    const items = isCover ? COVER_LAYOUTS : LAYOUT_GROUPS.flatMap(([gname, list]) => [["__h", gname], ...list]);
+    const items = [...(isCover ? [["__h", "Cover"], ...COVER_LAYOUTS] : []), ...LAYOUT_GROUPS.flatMap(([gname, list]) => [["__h", gname], ...list])];
     $("layoutGrid").replaceChildren(...items.map(([key, name]) => {
       if (key === "__h") { const h = document.createElement("p"); h.className = "sec-lbl"; h.style.cssText = "grid-column:1/-1; margin:6px 0 0"; h.textContent = name.toUpperCase(); return h; }
       const wrap = document.createElement("div");
@@ -1186,10 +1329,11 @@ function renderPanels(){
       const G = geom(key, W, H, { ...THEMES.classic, margin: .7, gap: .3 });
       G.slots.forEach(r => b.insertAdjacentHTML("beforeend", `<i style="left:${r.x / W * 100}%; top:${r.y / H * 100}%; width:${r.w / W * 100}%; height:${r.h / H * 100}%"></i>`));
       G.texts.forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
-      b.addEventListener("click", () => { page.layout = key; delete page.textPos; sel = null; changed(); });
+      b.addEventListener("click", () => { page.layout = key; delete page.slotPos; if (page.textPos) Object.keys(page.textPos).forEach(k => { if (!/^x/.test(k)) delete page.textPos[k]; }); sel = null; changed(); });
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
+    renderSpacing(pi);
     renderBgCtl(pi);
     renderCheck();
   }
@@ -1197,21 +1341,23 @@ function renderPanels(){
   if (!$("p-photos").hidden) renderPhotos();
   // text
   if (!$("p-text").hidden) {
-    const G = page ? geom(page.layout, D().size.w, D().size.h, TH()) : { texts: [] };
+    const G = page ? pageGeom(page) : { texts: [] };
     $("textNote").innerHTML = G.texts.length ? `Text on <b>${pageLabel(pi)}</b>. You can also type straight onto the page.` : `<b>${pageLabel(pi).replace(/^./, c => c.toUpperCase())}</b> has no text in this layout. Try <b>Photo + text</b> or <b>Text only</b> in Layouts.`;
     renderPairs(pi, page, G);
     $("textFields").replaceChildren(...G.texts.map(t => {
       const w = document.createElement("div");
       const id = "tf-" + t.role;
-      w.innerHTML = `<label class="f" for="${id}">${{ title: "Title", caption: "Caption", body: "Text" }[t.role]}</label>`;
+      w.innerHTML = `<label class="f" for="${id}">${{ title: "Title", caption: "Caption", body: "Text" }[t.role] || "Added text box"}</label>`;
       const inp = document.createElement(t.role === "body" ? "textarea" : "input"); inp.id = id; if (inp.tagName === "INPUT") inp.type = "text";
-      inp.value = page.texts[t.role] || ""; inp.placeholder = TEXT_PH[t.role];
+      inp.value = page.texts[t.role] || ""; inp.placeholder = TEXT_PH[t.role] || "Add text";
       inp.addEventListener("input", () => { page.texts[t.role] = inp.value; queueSave(); renderStage(); });
       w.append(inp, styleControls(pi, page, t, t.role === G.texts[0].role));
       return w;
     }));
 
   }
+  // elements
+  if (!$("p-elements").hidden) renderElements(pi);
   // theme
   if (!$("p-theme").hidden) {
     $("themeGrid").replaceChildren(...Object.entries(THEMES).map(([k, t]) => {
@@ -1367,7 +1513,7 @@ $("sizeSel").addEventListener("change", e => {
 // photos panel
 function photoUses(){
   const n = {};
-  D().pages.forEach(p => { const k = geom(p.layout, D().size.w, D().size.h, TH()).slots.length; p.slots.slice(0, k).forEach(s => { if (s.photo) n[s.photo] = (n[s.photo] || 0) + 1; }); if (hasBg(p)) n[p.bg.photo] = (n[p.bg.photo] || 0) + 1; });
+  D().pages.forEach(p => { const k = pageGeom(p).slots.length; for (let i = 0; i < k; i++) { const s = slotAt(p, i); if (s && s.photo) n[s.photo] = (n[s.photo] || 0) + 1; } if (hasBg(p)) n[p.bg.photo] = (n[p.bg.photo] || 0) + 1; });
   return n;
 }
 function renderPhotos(){
@@ -1420,9 +1566,9 @@ async function addPhoto(file){
 function issues(){
   const out = [], d = D(), th = TH();
   d.pages.forEach((p, pi) => {
-    const G = geom(p.layout, d.size.w, d.size.h, th); ensureSlots(p, G.slots.length);
+    const G = pageGeom(p);
     G.slots.forEach((r, si) => {
-      const s = p.slots[si], inset = th.frame && p.layout !== "full" && !fullCover(pi, p) ? th.frame.width : 0;
+      const s = slotAt(p, si) || {}, inset = th.frame && p.layout !== "full" && !fullCover(pi, p) ? th.frame.width : 0;
       if (!s.photo) out.push({ pi, kind: "empty" });
       else if (d.photos[s.photo] && printPPI(d.photos[s.photo], { w: r.w - 2 * inset, h: r.h - 2 * inset }, s) < LOW_PPI) out.push({ pi, kind: "low" });
     });
@@ -1499,10 +1645,10 @@ async function drawPage(pi, o){
   const X = v => (v + sl + b) * dpi; // inches on the trimmed page -> canvas pixels
   ctx.fillStyle = isCover ? th.coverBg : th.bg; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
   if (hasBg(page)) await drawBgPhoto(ctx, page.bg, isCover ? th.coverBg : th.bg, W, H, b, X, dpi);
-  const G = pageGeom(page); ensureSlots(page, G.slots.length);
+  const G = pageGeom(page);
   if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
   for (const [si, r0] of G.slots.entries()) {
-    const slot = page.slots[si];
+    const slot = slotAt(page, si) || {};
     // frames that touch the trim edge run into the bleed
     const r = { ...r0 }, e = .001;
     if (r.x <= e) { r.w += r.x + b; r.x = -b; }
