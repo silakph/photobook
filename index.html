@@ -5,21 +5,1100 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="only light">
 <title>Photobook</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='3' y='5' width='11' height='18' rx='2' fill='%231C1D21'/%3E%3Crect x='14' y='5' width='11' height='18' rx='2' fill='%232F5BD3'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@800&amp;family=Nunito:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;0,800;1,700&amp;family=Great+Vibes&amp;family=Lilita+One&amp;family=Cormorant+Garamond:ital,wght@0,600;1,500&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
 <style>
-:root{--ink:#1A1C22; --soft:#5A5E68; --page:#F4F1EA; --card:#FFFFFF; color-scheme:only light}
+:root{--ink:#1C1D21; --soft:#6A6D75; --line:#E4E1DA; --bg:#F3F1EC; --card:#FFFFFF; --blue:#2F5BD3; --blue-bg:#EEF3FF; --warn:#7A5300; --warn-bg:#FFF4D6; --ok:#3B7A57; --bad:#B42318; color-scheme:only light}
 *{box-sizing:border-box}
-body{margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--page); color:var(--ink); font:600 1rem/1.5 "Nunito", system-ui, sans-serif}
-.card{max-width:28rem; text-align:center; background:var(--card); border-radius:16px; padding:36px 28px; box-shadow:0 10px 30px rgba(0,0,0,.08)}
-h1{margin:0 0 8px; font-family:"Playfair Display", Georgia, serif; font-weight:800; font-size:2.2rem}
-p{margin:0; color:var(--soft)}
+html,body{height:100%}
+body{margin:0; background:var(--bg); color:var(--ink); font:500 14px/1.45 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif}
+[hidden]{display:none !important}
+button,input,select,textarea{font:inherit; color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--blue); outline-offset:2px}
+.btn{height:40px; padding:0 16px; border-radius:8px; border:1px solid var(--line); background:#FFFFFF; font-weight:600; display:inline-flex; align-items:center; gap:8px; white-space:nowrap}
+.btn.dark{background:var(--ink); color:#FFFFFF; border-color:var(--ink)}
+.btn.small{height:32px; padding:0 10px; font-size:13px}
+.btn:disabled{opacity:.5; cursor:default}
+.btn.danger[data-armed="1"]{background:var(--bad); border-color:var(--bad); color:#FFFFFF}
+.msg{min-height:1.3em; margin:8px 0 0; font-weight:600; color:var(--soft)}
+.msg.bad{color:var(--bad)}
+input[type=text],input[type=email],input[type=password],input[type=number],select,textarea{width:100%; height:40px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:#FFFFFF}
+textarea{height:auto; min-height:90px; padding:8px 10px; resize:vertical}
+label.f{display:block; font-size:12.5px; font-weight:600; margin:12px 0 5px}
+
+/* sign-in + library */
+.center{min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px}
+.card{background:var(--card); border-radius:14px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.07)}
+.signin{width:100%; max-width:24rem}
+h1,h2{margin:0}
+.brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px}
+.lib{max-width:72rem; margin:0 auto; padding:28px 20px 48px}
+.lib-head{display:flex; align-items:center; gap:12px; margin-bottom:22px; flex-wrap:wrap}
+.lib-head h1{font-size:26px; margin-right:auto}
+.books{display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:20px}
+.book{background:#FFFFFF; border-radius:12px; padding:14px; box-shadow:0 6px 18px rgba(0,0,0,.06); display:flex; flex-direction:column; gap:10px}
+.book .cover-thumb{aspect-ratio:1; border-radius:4px; overflow:hidden; background:var(--bg); display:flex; align-items:center; justify-content:center; cursor:pointer; border:0; padding:0}
+.book b{font-size:15px}
+.book .meta{font-size:12.5px; color:var(--soft)}
+.book .acts{display:flex; gap:6px}
+.empty-lib{padding:40px; text-align:center; color:var(--soft); background:#FFFFFF; border-radius:12px}
+
+/* editor shell */
+.editor{height:100%; display:flex; flex-direction:column}
+.topbar{height:64px; flex:none; display:flex; align-items:center; gap:14px; padding:0 16px; background:#FFFFFF; border-bottom:1px solid var(--line)}
+.topbar .title-in{border:0; height:auto; padding:0; font-weight:600; font-size:15px; width:220px; background:transparent}
+.topbar .lab{font-size:11px; color:var(--soft); font-weight:600; display:block}
+.saved{margin-left:auto; font-size:13px; font-weight:600; color:var(--ok)}
+.saved.pending{color:var(--soft)} .saved.bad{color:var(--bad)}
+.workarea{flex:1; display:flex; min-height:0}
+.pages{width:176px; flex:none; background:#FFFFFF; border-right:1px solid var(--line); padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:12px}
+.pages .lbl{margin:0; font-size:11px; font-weight:600; color:var(--soft); letter-spacing:.5px}
+.spread-thumb{display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px; border-radius:8px; border:2px solid transparent; background:transparent}
+.spread-thumb.on{border-color:var(--blue); background:var(--blue-bg)}
+.spread-thumb .pp{display:flex; gap:1px; pointer-events:none}
+.spread-thumb span{font-size:11px; color:var(--soft); font-weight:600}
+.spread-thumb.on span{color:var(--blue)}
+.stage{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; overflow:auto; padding:14px 20px 20px; gap:12px}
+.ctx{min-height:44px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; padding:6px 10px; border-radius:10px; background:#FFFFFF; box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.ctx .hint{font-size:13px; color:var(--soft)}
+.ctx input[type=range]{width:140px}
+.spread{display:flex; box-shadow:0 18px 40px rgba(28,29,33,.16); margin:auto 0}
+.spread .blank{background:repeating-linear-gradient(45deg,#ECE9E2 0 8px,#F3F1EC 8px 16px)}
+.stage-nav{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center}
+.round{width:36px; height:36px; border-radius:50%; border:1px solid var(--line); background:#FFFFFF; font-size:18px; line-height:1}
+.tools{width:330px; flex:none; background:#FFFFFF; border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+.tabs{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); flex:none}
+.tabs button{height:46px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--soft); font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink); font-weight:700; border-bottom-color:var(--ink)}
+.panel{padding:16px; overflow-y:auto; flex:1}
+.panel p.note{margin:0 0 10px; font-size:12.5px; color:var(--soft)}
+.layouts{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px}
+.layouts button{display:block; width:100%; aspect-ratio:1; border-radius:6px; border:1px solid var(--line); background:#FFFFFF; padding:0; position:relative; overflow:hidden}
+.layouts button.on{border:2px solid var(--blue)}
+.layouts i{position:absolute; background:#D9DDE6}
+.layouts i.t{background:#C5C1B8; border-radius:2px}
+.layouts small{display:block; font-size:11px; color:var(--soft); text-align:center; margin-top:3px}
+.photo-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px}
+.photo-grid button{position:relative; aspect-ratio:1; padding:0; border:0; border-radius:6px; overflow:hidden; background:var(--bg)}
+.photo-grid img{width:100%; height:100%; object-fit:cover; display:block; pointer-events:none}
+.photo-grid .used{position:absolute; right:4px; bottom:4px; padding:0 6px; border-radius:999px; background:rgba(0,0,0,.6); color:#FFFFFF; font-size:10.5px; font-weight:700}
+.photo-grid .lowres{position:absolute; left:4px; top:4px; width:10px; height:10px; border-radius:50%; background:#C98A12; border:2px solid #FFFFFF}
+.upl{display:flex; flex-direction:column; gap:6px}
+.themes{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px}
+.themes button{border:1px solid var(--line); border-radius:10px; padding:8px; background:#FFFFFF; display:flex; flex-direction:column; gap:6px; align-items:stretch; text-align:left}
+.themes button.on{border:2px solid var(--blue); background:var(--blue-bg)}
+.themes .sw{height:64px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px}
+.check{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
+.check p{margin:0 0 6px; display:flex; gap:8px; align-items:flex-start; font-size:13px}
+.check i{flex:none; width:8px; height:8px; margin-top:6px; border-radius:50%; background:var(--ok)}
+.check i.w{background:#C98A12}
+.check button{border:0; background:none; padding:0; color:var(--blue); font-weight:600; text-decoration:underline}
+
+/* page rendering (editor + preview) */
+.pg{position:relative; overflow:hidden; flex:none}
+.pg + .pg{box-shadow:inset 1px 0 0 rgba(0,0,0,.06)}
+.slot{position:absolute; overflow:hidden; cursor:pointer; touch-action:none}
+.slot .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#E9ECF2; color:#8A93A6; font-size:12px; font-weight:600; flex-direction:column; gap:4px; text-align:center; padding:6px}
+.slot img{position:absolute; max-width:none; user-select:none; -webkit-user-drag:none; pointer-events:none}
+.slot.sel{outline:3px solid var(--blue); outline-offset:-3px; z-index:2}
+.slot.drop{outline:3px dashed var(--blue); outline-offset:-3px}
+.slot .warnb{position:absolute; left:4px; top:4px; padding:1px 6px; border-radius:999px; background:var(--warn-bg); color:var(--warn); font-size:10px; font-weight:700; z-index:1}
+.tx{position:absolute; display:flex; align-items:center; outline:none; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.25; cursor:text}
+.tx > div{width:100%; outline:none; min-height:1em}
+.tx > div:empty::before{content:attr(data-ph); opacity:.38}
+.editing .tx:hover{box-shadow:inset 0 0 0 1px rgba(47,91,211,.35)}
+.no-edit .tx > div:empty::before{content:none}
+.no-edit .slot .ph{background:transparent; color:transparent}
+
+/* dialogs */
+dialog{border:0; border-radius:16px; padding:0; width:min(100% - 24px, 560px); box-shadow:0 24px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(28,29,33,.45)}
+.dlg-body{padding:22px 24px 6px; max-height:75vh; overflow-y:auto}
+.dlg-body h2{font-size:21px}
+.dlg-body .sub{margin:6px 0 0; color:var(--soft); font-size:13.5px}
+.dlg-acts{display:flex; justify-content:flex-end; gap:10px; padding:16px 24px 20px; border-top:1px solid var(--line); margin-top:12px}
+.opts{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px}
+.opt{display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 6px; border-radius:10px; border:1px solid var(--line); font-size:13px; font-weight:500; cursor:pointer; text-align:center}
+.opt input{position:absolute; opacity:0; pointer-events:none}
+.opt:has(input:checked){border:2px solid var(--blue); background:#F4F7FF; font-weight:600}
+.opt .shape{border:2px solid #9A968C; border-radius:2px}
+.opt:has(input:checked) .shape{border-color:var(--blue)}
+.row-opt{display:flex; gap:10px; align-items:flex-start; padding:11px 13px; border-radius:10px; border:1px solid var(--line); margin-bottom:8px; cursor:pointer}
+.row-opt:has(input:checked){border:2px solid var(--blue); background:#F4F7FF}
+.checks label{display:flex; gap:10px; align-items:center; margin:8px 0; font-size:13.5px}
+.checks input{width:18px; height:18px; accent-color:var(--blue)}
+.summary{margin-top:12px; padding:12px 14px; border-radius:10px; background:#F6F4EF; font-size:13px; display:flex; flex-direction:column; gap:4px}
+.summary .w{color:var(--warn)}
+.bar{height:8px; border-radius:4px; background:#ECE9E2; margin-top:6px}
+.bar > div{height:8px; border-radius:4px; background:var(--blue); width:0; transition:width .2s}
+
+/* preview */
+.preview{position:fixed; inset:0; z-index:50; background:#24262B; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:20px}
+.preview .spread{box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.preview .pv-nav{display:flex; gap:14px; align-items:center; color:#FFFFFF; font-weight:600}
+.preview .round{background:#3A3D44; border-color:#4A4D55; color:#FFFFFF}
+.preview .close{position:absolute; top:14px; right:14px}
+
+@media (max-width:1100px){ .tools{width:280px} .pages{width:140px} }
+@media (max-width:820px){
+  .workarea{flex-direction:column; overflow:auto}
+  .pages{width:auto; flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line)}
+  .pages .lbl{display:none}
+  .tools{width:auto; border-left:0; border-top:1px solid var(--line); min-height:420px}
+  .topbar{height:auto; flex-wrap:wrap; padding:10px 12px}
+}
 </style>
 </head>
 <body>
-<main class="card">
-  <h1>Photobook</h1>
-  <p>Coming soon: design photobook pages and download them as print-ready PDFs.</p>
-</main>
+
+<!-- sign in -->
+<div class="center" id="signin" hidden="">
+  <section class="card signin" aria-labelledby="siTitle">
+    <div class="brand"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 28 28"><rect x="3" y="5" width="11" height="18" rx="2" fill="#1C1D21"></rect><rect x="14" y="5" width="11" height="18" rx="2" fill="#2F5BD3"></rect></svg>Photobook</div>
+    <h2 id="siTitle" style="margin-top:16px; font-size:20px">Sign in</h2>
+    <p style="margin:4px 0 0; color:var(--soft)">Same account as your invites.</p>
+    <label class="f" for="s-email">Email</label><input id="s-email" type="email" autocomplete="username">
+    <label class="f" for="s-pass">Password</label><input id="s-pass" type="password" autocomplete="current-password">
+    <div style="margin-top:16px"><button class="btn dark" type="button" id="siBtn">Sign in</button></div>
+    <p class="msg bad" id="siMsg" role="alert"></p>
+  </section>
+</div>
+<div class="center" id="noConfig" hidden=""><p class="card">Couldn’t reach the sign-in service. Check your connection and reload.</p></div>
+
+<!-- library -->
+<div id="library" hidden="">
+  <div class="lib">
+    <div class="lib-head">
+      <div class="brand"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 28 28"><rect x="3" y="5" width="11" height="18" rx="2" fill="#1C1D21"></rect><rect x="14" y="5" width="11" height="18" rx="2" fill="#2F5BD3"></rect></svg></div>
+      <h1>Your photobooks</h1>
+      <button class="btn dark" type="button" id="newBookBtn">+ New book</button>
+      <button class="btn" type="button" id="signOut">Sign out</button>
+    </div>
+    <div class="books" id="books"></div>
+    <p class="msg" id="libMsg" role="status"></p>
+  </div>
+</div>
+
+<!-- editor -->
+<div class="editor" id="editor" hidden="">
+  <header class="topbar">
+    <button class="btn small" type="button" id="backBtn" aria-label="Back to your photobooks">‹ Books</button>
+    <label><span class="lab">BOOK</span><input class="title-in" id="bookTitle" type="text" maxlength="120" aria-label="Book title"></label>
+    <span class="lab" id="sizeLabel" style="font-size:13px; color:var(--ink); font-weight:500"></span>
+    <span class="saved" id="saved" role="status">Saved</span>
+    <button class="btn" type="button" id="previewBtn">Preview book</button>
+    <button class="btn dark" type="button" id="pdfBtn">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#FFFFFF" stroke-width="1.8"><path d="M8 2v8M4.5 7L8 10.5 11.5 7M3 13h10"></path></svg>Download PDF</button>
+  </header>
+  <div class="workarea">
+    <nav class="pages" aria-label="Pages"><p class="lbl">PAGES</p><div id="spreadList" style="display:contents"></div>
+      <button class="btn small" type="button" id="addPages" style="margin-top:auto">+ Add pages</button></nav>
+    <main class="stage" id="stage">
+      <div class="ctx" id="ctx"></div>
+      <div class="spread" id="spread"></div>
+      <div class="stage-nav">
+        <button class="round" type="button" id="prevSpread" aria-label="Previous pages">‹</button>
+        <span id="spreadLabel" style="font-weight:600"></span>
+        <button class="round" type="button" id="nextSpread" aria-label="Next pages">›</button>
+        <span style="width:12px"></span>
+        <button class="btn small" type="button" id="moveLeft" title="Move these pages earlier">← Move</button>
+        <button class="btn small" type="button" id="moveRight" title="Move these pages later">Move →</button>
+        <button class="btn small danger" type="button" id="delSpread">Delete these pages</button>
+      </div>
+    </main>
+    <aside class="tools">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="t-photos" aria-selected="false" type="button">Photos</button>
+        <button role="tab" id="t-layouts" aria-selected="true" type="button">Layouts</button>
+        <button role="tab" id="t-text" aria-selected="false" type="button">Text</button>
+        <button role="tab" id="t-theme" aria-selected="false" type="button">Theme</button>
+      </div>
+      <div class="panel" id="p-photos" hidden="">
+        <div class="upl">
+          <label class="btn dark" style="justify-content:center">+ Add photos<input id="upload" type="file" accept="image/jpeg,image/png,image/webp" multiple="" hidden=""></label>
+          <p class="note" style="margin:0">Full-size originals are kept for printing. Drag a photo onto a frame, or select a frame and tap a photo.</p>
+          <p class="msg" id="upMsg" role="status" style="margin:0"></p>
+        </div>
+        <div class="photo-grid" id="photoGrid"></div>
+      </div>
+      <div class="panel" id="p-layouts">
+        <p class="note" id="layoutNote"></p>
+        <div class="layouts" id="layoutGrid"></div>
+        <div class="check" id="check"></div>
+      </div>
+      <div class="panel" id="p-text" hidden="">
+        <p class="note" id="textNote"></p>
+        <div id="textFields"></div>
+        <label class="f" for="textScale">Text size</label>
+        <input id="textScale" type="range" min="0.6" max="1.8" step="0.05" value="1" style="width:100%">
+      </div>
+      <div class="panel" id="p-theme" hidden="">
+        <p class="note">The theme styles every page: background, photo borders and fonts. Your photos and text stay put.</p>
+        <div class="themes" id="themeGrid"></div>
+        <label class="f" for="sizeSel">Book size</label>
+        <select id="sizeSel"></select>
+        <div class="two" id="customSize" hidden="" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
+          <input id="cw" type="number" min="3" max="20" step="0.25" aria-label="Width in inches" placeholder="Width (in)">
+          <input id="ch" type="number" min="3" max="20" step="0.25" aria-label="Height in inches" placeholder="Height (in)">
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- new book -->
+<dialog id="newDlg" aria-labelledby="newTitle">
+  <div class="dlg-body">
+    <h2 id="newTitle">New photobook</h2>
+    <label class="f" for="nbTitle">Title</label><input id="nbTitle" type="text" maxlength="120" placeholder="e.g. Christmas 2026">
+    <label class="f">Size</label><div class="opts" id="nbSizes"></div>
+    <label class="f">Theme</label><div class="opts" id="nbThemes"></div>
+    <p class="msg bad" id="nbMsg" role="alert"></p>
+  </div>
+  <div class="dlg-acts"><button class="btn" type="button" id="nbCancel">Cancel</button><button class="btn dark" type="button" id="nbCreate">Create book</button></div>
+</dialog>
+
+<!-- export -->
+<dialog id="pdfDlg" aria-labelledby="pdfTitle">
+  <div class="dlg-body">
+    <h2 id="pdfTitle">Download print-ready PDF</h2>
+    <p class="sub">Every page is rendered at full print resolution, using your original photos.</p>
+    <label class="f">Quality</label>
+    <label class="row-opt"><input type="radio" name="q" value="300" checked=""><span><b>Print · 300 dpi</b><br><span style="font-size:12.5px; color:var(--soft)">For a print shop or photobook service. Larger file.</span></span></label>
+    <label class="row-opt"><input type="radio" name="q" value="150"><span><b>Proof · 150 dpi</b><br><span style="font-size:12.5px; color:var(--soft)">Smaller file to check or share before printing.</span></span></label>
+    <div class="checks">
+      <label><input type="checkbox" id="optBleed" checked=""><span><b>Add 3 mm bleed</b> <span style="color:var(--soft); font-size:12.5px">· edge-to-edge photos run past the trim line</span></span></label>
+      <label><input type="checkbox" id="optMarks"><span><b>Crop marks</b> <span style="color:var(--soft); font-size:12.5px">· only if your printer asks for them</span></span></label>
+      <label><input type="checkbox" id="optCover" checked=""><span><b>Cover as a separate file</b></span></label>
+    </div>
+    <div class="summary" id="pdfSummary"></div>
+    <div id="pdfProgress" hidden=""><p class="msg" id="pdfMsg" style="margin:12px 0 0"></p><div class="bar"><div id="pdfBar"></div></div></div>
+  </div>
+  <div class="dlg-acts"><button class="btn" type="button" id="pdfCancel">Close</button><button class="btn dark" type="button" id="pdfGo">Create PDF</button></div>
+</dialog>
+
+<!-- preview -->
+<div class="preview" id="preview" hidden="" role="dialog" aria-label="Book preview">
+  <button class="btn close" type="button" id="pvClose">Close preview</button>
+  <div class="spread" id="pvSpread"></div>
+  <div class="pv-nav"><button class="round" type="button" id="pvPrev" aria-label="Previous pages">‹</button><span id="pvLabel"></span><button class="round" type="button" id="pvNext" aria-label="Next pages">›</button></div>
+</div>
+
+<script src="https://silakph.github.io/invite/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const configured = window.supabase && typeof window.SUPABASE_URL === "string" && !/YOUR_/.test(window.SUPABASE_URL + window.SUPABASE_ANON_KEY);
+const sb = configured ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY) : null;
+const BUCKET = "photobook";
+const errText = e => (e && (e.message || e.error_description || e.code)) || "Check your connection and try again.";
+function say(id, text, bad){ $(id).textContent = text || ""; $(id).classList.toggle("bad", !!bad); }
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/-/g, "").slice(0, 16);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ===================== book model =====================
+const SIZES = {
+  "8x8":   { w: 8, h: 8, label: "8 × 8 in" },
+  "11x8.5":{ w: 11, h: 8.5, label: "11 × 8.5 in" },
+  "a4":    { w: 8.27, h: 11.69, label: "A4 portrait" },
+  "10x10": { w: 10, h: 10, label: "10 × 10 in" },
+  "12x12": { w: 12, h: 12, label: "12 × 12 in" },
+  "custom":{ w: 8, h: 8, label: "Custom…" }
+};
+const sizeLabel = s => s.key === "custom" ? `${s.w} × ${s.h} in` : (SIZES[s.key] || SIZES["8x8"]).label;
+
+// Themes: colours, margins and fonts (sizes in inches / points)
+const THEMES = {
+  classic: { name: "Classic", bg: "#FFFFFF", coverBg: "#FFFFFF", ink: "#1C1D21", coverInk: "#1C1D21", accent: "#1C1D21", margin: .55, gap: .16,
+    title: { family: "Playfair Display", weight: 800, style: "normal" }, caption: { family: "Playfair Display", weight: 700, style: "italic" },
+    body: { family: "Nunito", weight: 600, style: "normal" }, frame: null, deco: null, sample: { bg: "#FFFFFF", fg: "#1C1D21", text: "Aa", font: "800 22px 'Playfair Display'" } },
+  christmas: { name: "Christmas", bg: "#FFFDF8", coverBg: "#0E1B33", ink: "#0B2E5C", coverInk: "#FFF6E5", accent: "#B3172B", margin: .6, gap: .18,
+    title: { family: "Great Vibes", weight: 400, style: "normal" }, caption: { family: "Nunito", weight: 700, style: "normal" },
+    body: { family: "Nunito", weight: 600, style: "normal" }, frame: { color: "#FFFFFF", width: .07, shadow: true }, deco: "baubles",
+    sample: { bg: "#0E1B33", fg: "#FFF6E5", text: "Merry", font: "400 26px 'Great Vibes'" } },
+  birthday: { name: "Birthday bricks", bg: "#FFFFFF", coverBg: "#FFFFFF", ink: "#16181C", coverInk: "#16181C", accent: "#0055BF", margin: .55, gap: .2,
+    title: { family: "Lilita One", weight: 400, style: "normal" }, caption: { family: "Nunito", weight: 800, style: "normal" },
+    body: { family: "Nunito", weight: 700, style: "normal" }, frame: { colors: ["#DA291C", "#0055BF", "#FFD100"], width: .09 }, deco: "bricks",
+    sample: { bg: "#FFD100", fg: "#16181C", text: "Build!", font: "400 22px 'Lilita One'" } },
+  fullbleed: { name: "Full-bleed", bg: "#FFFFFF", coverBg: "#14161B", ink: "#1C1D21", coverInk: "#FFFFFF", accent: "#1C1D21", margin: .35, gap: .08,
+    title: { family: "Cormorant Garamond", weight: 500, style: "italic" }, caption: { family: "Cormorant Garamond", weight: 500, style: "italic" },
+    body: { family: "Nunito", weight: 600, style: "normal" }, frame: null, deco: null, overCover: true,
+    sample: { bg: "#8F9BAE", fg: "#FFFFFF", text: "Summer", font: "italic 500 24px 'Cormorant Garamond'" } }
+};
+const FONT_LOADS = ["800 20px 'Playfair Display'", "italic 700 20px 'Playfair Display'", "400 20px 'Great Vibes'", "400 20px 'Lilita One'",
+  "italic 500 20px 'Cormorant Garamond'", "600 20px 'Nunito'", "700 20px 'Nunito'", "800 20px 'Nunito'"];
+const fontsReady = () => Promise.all(FONT_LOADS.map(f => document.fonts.load(f).catch(() => null)));
+
+const LAYOUTS = [
+  ["one", "1 photo"], ["full", "Full-bleed"], ["two", "2 photos"], ["twoStack", "2 stacked"], ["three", "3 photos"],
+  ["four", "4 photos"], ["six", "6 photos"], ["photoText", "Photo + text"], ["text", "Text only"]
+];
+const LAYOUT_NAME = Object.fromEntries([...LAYOUTS, ["cover", "Cover"]]);
+
+// Where the frames and text boxes go on a page, in inches from the page's top-left (trim) corner
+function geom(layout, W, H, th){
+  const m = th.margin, g = th.gap, ix = m, iy = m, iw = W - 2 * m, ih = H - 2 * m;
+  const R = (x, y, w, h) => ({ x, y, w, h });
+  const k = Math.min(W, H) / 8; // text scales with the page
+  const cap = .55 * k;
+  switch (layout) {
+    case "cover":
+      if (th.overCover) return { slots: [R(0, 0, W, H)], texts: [
+        { role: "title", rect: R(ix, H - m - 1.5 * k, iw, 1 * k), size: 40 * k, align: "left", over: true },
+        { role: "caption", rect: R(ix, H - m - .5 * k, iw, .45 * k), size: 13 * k, align: "left", over: true }] };
+      return { slots: [R(ix, iy + (th.deco === "baubles" ? 1.1 * k : th.deco === "bricks" ? .45 * k : 0), iw, ih * .62 - (th.deco === "baubles" ? 1.1 * k : th.deco === "bricks" ? .45 * k : 0))], texts: [
+        { role: "title", rect: R(ix, iy + ih * .66, iw, ih * .2), size: 40 * k, align: "center" },
+        { role: "caption", rect: R(ix, iy + ih * .87, iw, ih * .12), size: 13 * k, align: "center" }] };
+    case "one": return { slots: [R(ix, iy, iw, ih - cap)], texts: [{ role: "caption", rect: R(ix, iy + ih - cap + .08 * k, iw, cap - .08 * k), size: 14 * k, align: "center" }] };
+    case "full": return { slots: [R(0, 0, W, H)], texts: [] };
+    case "two": { const w = (iw - g) / 2; return { slots: [R(ix, iy, w, ih), R(ix + w + g, iy, w, ih)], texts: [] }; }
+    case "twoStack": { const h = (ih - g) / 2; return { slots: [R(ix, iy, iw, h), R(ix, iy + h + g, iw, h)], texts: [] }; }
+    case "three": { const w1 = (iw - g) * .6, w2 = iw - g - w1, h = (ih - g) / 2; return { slots: [R(ix, iy, w1, ih), R(ix + w1 + g, iy, w2, h), R(ix + w1 + g, iy + h + g, w2, h)], texts: [] }; }
+    case "four": { const w = (iw - g) / 2, h = (ih - g) / 2; return { slots: [R(ix, iy, w, h), R(ix + w + g, iy, w, h), R(ix, iy + h + g, w, h), R(ix + w + g, iy + h + g, w, h)], texts: [] }; }
+    case "six": {
+      const cols = W >= H ? 3 : 2, rows = 6 / cols, w = (iw - g * (cols - 1)) / cols, h = (ih - g * (rows - 1)) / rows, s = [];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) s.push(R(ix + c * (w + g), iy + r * (h + g), w, h));
+      return { slots: s, texts: [] };
+    }
+    case "photoText": { const w = (iw - g * 2) / 2; return { slots: [R(ix, iy, w, ih)], texts: [
+      { role: "title", rect: R(ix + w + g * 2, iy + ih * .22, w, ih * .2), size: 26 * k, align: "left" },
+      { role: "body", rect: R(ix + w + g * 2, iy + ih * .44, w, ih * .46), size: 12.5 * k, align: "left" }] }; }
+    case "text": return { slots: [], texts: [
+      { role: "title", rect: R(ix, iy + ih * .28, iw, ih * .22), size: 34 * k, align: "center" },
+      { role: "body", rect: R(ix + iw * .12, iy + ih * .52, iw * .76, ih * .3), size: 13.5 * k, align: "center" }] };
+  }
+  return { slots: [], texts: [] };
+}
+const TEXT_PH = { title: "Add a title", caption: "Add a caption", body: "Add some words…" };
+
+function newPage(layout){ return { id: uid(), layout, slots: [], texts: { title: "", caption: "", body: "" }, textScale: 1 }; }
+function newBookData(sizeKey, theme, custom){
+  const sz = sizeKey === "custom" ? { key: "custom", w: custom.w, h: custom.h } : { key: sizeKey, w: SIZES[sizeKey].w, h: SIZES[sizeKey].h };
+  return { ver: 1, size: sz, theme, photos: {}, pages: [newPage("cover"), newPage("one"), newPage("four"), newPage("two"), newPage("photoText")] };
+}
+// make sure a page has at least as many slot records as its layout has frames (extra ones are kept for switching back)
+function ensureSlots(page, n){ while (page.slots.length < n) page.slots.push({ photo: null, cx: .5, cy: .5, zoom: 1 }); }
+
+// Crop: which part of the original photo shows in a frame of size (w × h). zoom ≥ 1; (cx, cy) = the centre, as fractions of the photo.
+function crop(img, w, h, slot){
+  const s = Math.max(w / img.w, h / img.h) * (slot.zoom || 1);
+  const sw = w / s, sh = h / s;
+  const sx = clamp((slot.cx ?? .5) * img.w - sw / 2, 0, Math.max(0, img.w - sw));
+  const sy = clamp((slot.cy ?? .5) * img.h - sh / 2, 0, Math.max(0, img.h - sh));
+  return { sx, sy, sw, sh, s };
+}
+// photo pixels per inch actually printed in a frame
+function printPPI(img, rect, slot){ const c = crop(img, rect.w, rect.h, slot); return c.sw / rect.w; }
+const LOW_PPI = 200;
+
+// ===================== app state =====================
+let session = null, BOOK = null, spreadIdx = 0, sel = null, saveTimer = null, saving = false, dirtyAgain = false;
+const thumbURL = new Map(); // photo id -> object URL of its small preview
+const D = () => BOOK.data;
+const TH = () => THEMES[D().theme] || THEMES.classic;
+const pageSize = () => D().size;
+
+// spreads: [cover], then pairs of inside pages
+function spreads(){
+  const p = D().pages, out = [[0]];
+  for (let i = 1; i < p.length; i += 2) out.push(p[i + 1] ? [i, i + 1] : [i, null]);
+  return out;
+}
+const spreadName = sp => sp[0] === 0 ? "Cover" : sp[1] ? `${sp[0]} – ${sp[1]}` : `${sp[0]}`;
+
+// ===================== storage =====================
+async function photoThumbURL(id){
+  if (thumbURL.has(id)) return thumbURL.get(id);
+  const ph = D().photos[id]; if (!ph) return null;
+  const p = sb.storage.from(BUCKET).download(ph.thumb).then(({ data, error }) => { if (error) throw error; return URL.createObjectURL(data); })
+    .catch(() => { thumbURL.delete(id); return null; });
+  thumbURL.set(id, p);
+  return p;
+}
+async function loadOriginal(id){
+  const ph = D().photos[id];
+  const { data, error } = await sb.storage.from(BUCKET).download(ph.orig);
+  if (error) throw error;
+  return createImageBitmap(data, { imageOrientation: "from-image" });
+}
+
+// ===================== sign in + library =====================
+function show(view){ ["signin", "library", "editor", "noConfig"].forEach(v => { $(v).hidden = v !== view; }); }
+$("siBtn").addEventListener("click", async () => {
+  const email = $("s-email").value.trim(), password = $("s-pass").value;
+  if (!email || !password) return say("siMsg", "Enter your email and password.", true);
+  $("siBtn").disabled = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  $("siBtn").disabled = false;
+  if (error) return say("siMsg", "That email and password didn’t work.", true);
+  $("s-pass").value = ""; session = data.session; openLibrary();
+});
+$("s-pass").addEventListener("keydown", e => { if (e.key === "Enter") $("siBtn").click(); });
+$("signOut").addEventListener("click", async () => { await sb.auth.signOut(); session = null; show("signin"); });
+
+async function openLibrary(){
+  show("library"); history.replaceState(null, "", location.pathname);
+  say("libMsg", "Loading…");
+  const { data, error } = await sb.from("books").select("id,title,updated_at,data").order("updated_at", { ascending: false });
+  if (error) return say("libMsg", /books/.test(error.message || "") ? "Run photobook.sql in Supabase first, then reload." : "Couldn’t load your books. " + errText(error), true);
+  say("libMsg", "");
+  const box = $("books");
+  if (!data.length) { box.innerHTML = '<div class="empty-lib">No photobooks yet. Tap <b>+ New book</b> to start one.</div>'; return; }
+  box.replaceChildren(...data.map(b => {
+    const el = document.createElement("article"); el.className = "book";
+    const d = b.data || {}, th = THEMES[d.theme] || THEMES.classic, sz = d.size || { key: "8x8", w: 8, h: 8 };
+    const cov = document.createElement("button"); cov.type = "button"; cov.className = "cover-thumb"; cov.setAttribute("aria-label", `Open ${b.title}`);
+    cov.style.background = th.coverBg;
+    cov.innerHTML = `<span style="font:${th.sample.font}; color:${th.coverInk}; padding:8px; text-align:center">${esc(b.title)}</span>`;
+    cov.addEventListener("click", () => openBook(b.id));
+    const info = document.createElement("div");
+    info.innerHTML = `<b>${esc(b.title)}</b><div class="meta">${esc(sizeLabel(sz))} · ${(d.pages || []).length} pages · ${th.name}<br>Edited ${new Date(b.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>`;
+    const acts = document.createElement("div"); acts.className = "acts";
+    const op = document.createElement("button"); op.className = "btn small dark"; op.type = "button"; op.textContent = "Open"; op.addEventListener("click", () => openBook(b.id));
+    const del = document.createElement("button"); del.className = "btn small danger"; del.type = "button"; del.textContent = "Delete";
+    armed(del, "Delete", async () => { del.disabled = true; await deleteBook(b.id); openLibrary(); });
+    acts.append(op, del);
+    el.append(cov, info, acts);
+    return el;
+  }));
+}
+function armed(btn, idle, run){
+  btn.addEventListener("click", () => {
+    if (btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = "Tap again to delete"; setTimeout(() => { btn.dataset.armed = ""; btn.textContent = idle; }, 3000); return; }
+    btn.dataset.armed = ""; run();
+  });
+}
+async function deleteBook(id){
+  try {
+    for (const dir of ["orig", "thumb"]) {
+      const { data } = await sb.storage.from(BUCKET).list(`${id}/${dir}`, { limit: 1000 });
+      if (data && data.length) await sb.storage.from(BUCKET).remove(data.map(f => `${id}/${dir}/${f.name}`));
+    }
+  } catch {}
+  const { error } = await sb.from("books").delete().eq("id", id);
+  if (error) say("libMsg", "Couldn’t delete. " + errText(error), true);
+}
+
+// new book dialog
+(function buildNewDialog(){
+  $("nbSizes").innerHTML = Object.entries(SIZES).map(([k, s], i) => {
+    const r = s.w / s.h, w = r >= 1 ? 34 : 34 * r, h = r >= 1 ? 34 / r : 34;
+    return `<label class="opt"><input type="radio" name="nbs" value="${k}" ${i ? "" : "checked"}><span class="shape" style="width:${w}px; height:${h}px"></span>${s.label}</label>`;
+  }).join("") + '<div id="nbCustom" hidden style="grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:8px"><input id="nbW" type="number" min="3" max="20" step="0.25" placeholder="Width (in)" aria-label="Width in inches"><input id="nbH" type="number" min="3" max="20" step="0.25" placeholder="Height (in)" aria-label="Height in inches"></div>';
+  $("nbThemes").innerHTML = Object.entries(THEMES).map(([k, t], i) =>
+    `<label class="opt"><input type="radio" name="nbt" value="${k}" ${i ? "" : "checked"}><span style="width:100%; height:40px; border-radius:6px; display:flex; align-items:center; justify-content:center; background:${t.sample.bg}; color:${t.sample.fg}; font:${t.sample.font}">${t.sample.text}</span>${t.name}</label>`).join("");
+  $("nbSizes").addEventListener("change", () => { $("nbCustom").hidden = document.querySelector('input[name=nbs]:checked').value !== "custom"; });
+})();
+$("newBookBtn").addEventListener("click", () => { $("nbTitle").value = ""; say("nbMsg", ""); $("newDlg").showModal(); $("nbTitle").focus(); });
+$("nbCancel").addEventListener("click", () => $("newDlg").close());
+$("nbCreate").addEventListener("click", async () => {
+  const title = $("nbTitle").value.trim() || "Untitled book";
+  const sizeKey = document.querySelector("input[name=nbs]:checked").value, theme = document.querySelector("input[name=nbt]:checked").value;
+  let custom = null;
+  if (sizeKey === "custom") {
+    const w = parseFloat($("nbW").value), h = parseFloat($("nbH").value);
+    if (!(w >= 3 && w <= 20 && h >= 3 && h <= 20)) return say("nbMsg", "Enter a width and height between 3 and 20 inches.", true);
+    custom = { w, h };
+  }
+  $("nbCreate").disabled = true;
+  const { data, error } = await sb.from("books").insert({ title, data: newBookData(sizeKey, theme, custom) }).select("id").single();
+  $("nbCreate").disabled = false;
+  if (error) return say("nbMsg", "Couldn’t create the book. " + errText(error), true);
+  $("newDlg").close(); openBook(data.id);
+});
+
+// ===================== editor =====================
+async function openBook(id){
+  const { data, error } = await sb.from("books").select("id,title,data").eq("id", id).single();
+  if (error) { say("libMsg", "Couldn’t open that book. " + errText(error), true); return; }
+  BOOK = data; BOOK.data = { ...newBookData("8x8", "classic"), ...(data.data || {}) };
+  if (!data.data || !data.data.pages) BOOK.data.pages = newBookData("8x8", "classic").pages;
+  thumbURL.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); thumbURL.clear();
+  spreadIdx = 0; sel = null;
+  history.replaceState(null, "", "#book=" + id);
+  show("editor");
+  $("bookTitle").value = BOOK.title;
+  setSaved("ok");
+  await fontsReady();
+  renderAll();
+}
+$("backBtn").addEventListener("click", async () => { await flushSave(); openLibrary(); });
+$("bookTitle").addEventListener("input", () => { BOOK.title = $("bookTitle").value.trim() || "Untitled book"; queueSave(); });
+
+// ---- autosave ----
+function setSaved(state, text){
+  const el = $("saved");
+  el.className = "saved" + (state === "pending" ? " pending" : state === "bad" ? " bad" : "");
+  el.textContent = text || (state === "pending" ? "Saving…" : state === "bad" ? "Not saved" : "Saved");
+}
+function queueSave(){ setSaved("pending"); clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 900); }
+async function doSave(){
+  if (saving) { dirtyAgain = true; return; }
+  saving = true; dirtyAgain = false;
+  const { error } = await sb.from("books").update({ title: BOOK.title, data: BOOK.data, updated_at: new Date().toISOString() }).eq("id", BOOK.id);
+  saving = false;
+  if (error) setSaved("bad", "Not saved: " + errText(error)); else setSaved("ok");
+  if (dirtyAgain) doSave();
+}
+async function flushSave(){ if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await doSave(); } }
+addEventListener("beforeunload", e => { if ($("saved").classList.contains("pending")) { e.preventDefault(); e.returnValue = ""; } });
+function changed(opts = {}){ queueSave(); if (opts.stage !== false) renderStage(); renderSpreadList(); if (opts.panels !== false) renderPanels(); }
+
+// ---- rendering a page as HTML (editor, thumbnails and preview share this) ----
+function renderPage(pi, ppi, mode){
+  const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = pi === 0;
+  const el = document.createElement("div"); el.className = "pg";
+  el.style.width = W * ppi + "px"; el.style.height = H * ppi + "px";
+  el.style.background = isCover ? th.coverBg : th.bg;
+  if (!page) { el.classList.add("blank"); return el; }
+  const G = geom(page.layout, W, H, th);
+  ensureSlots(page, G.slots.length);
+  if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H));
+  G.slots.forEach((r, si) => {
+    const slot = page.slots[si], s = document.createElement("div");
+    s.className = "slot"; s.dataset.p = pi; s.dataset.s = si;
+    let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
+    if (th.frame && page.layout !== "full" && !(isCover && th.overCover)) {
+      inset = th.frame.width;
+      s.style.background = th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
+      if (th.frame.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
+    }
+    Object.assign(s.style, { left: fx * ppi + "px", top: fy * ppi + "px", width: fw * ppi + "px", height: fh * ppi + "px" });
+    const inner = document.createElement("div"); inner.style.cssText = `position:absolute; inset:${inset * ppi}px; overflow:hidden`;
+    s.appendChild(inner);
+    const ph = slot.photo && d.photos[slot.photo];
+    if (ph) {
+      const img = document.createElement("img"); img.alt = "";
+      placeImg(img, ph, (fw - 2 * inset) * ppi, (fh - 2 * inset) * ppi, slot);
+      photoThumbURL(slot.photo).then(u => { if (u) img.src = u; });
+      inner.appendChild(img);
+      if (mode === "edit" && printPPI(ph, { w: fw - 2 * inset, h: fh - 2 * inset }, slot) < LOW_PPI) s.insertAdjacentHTML("beforeend", '<span class="warnb">Low resolution for print</span>');
+    } else {
+      inner.innerHTML = `<div class="ph">${mode === "edit" ? '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"></rect><circle cx="14" cy="16" r="3"></circle><path d="M5 28l9-8 7 6 5-4 9 8"></path></svg>Drop a photo' : ""}</div>`;
+    }
+    if (mode === "edit") {
+      if (sel && sel.p === pi && sel.s === si) s.classList.add("sel");
+      wireSlot(s, inner, pi, si);
+    }
+    el.appendChild(s);
+  });
+  G.texts.forEach(t => {
+    const st = th[t.role] || th.body, size = t.size * (page.textScale || 1);
+    const box = document.createElement("div"); box.className = "tx";
+    Object.assign(box.style, { left: t.rect.x * ppi + "px", top: t.rect.y * ppi + "px", width: t.rect.w * ppi + "px", height: t.rect.h * ppi + "px",
+      justifyContent: t.align === "center" ? "center" : "flex-start", textAlign: t.align,
+      font: `${st.style} ${st.weight} ${size / 72 * ppi}px "${st.family}"`,
+      color: t.over ? "#FFFFFF" : isCover ? (t.role === "title" && th.deco === "baubles" ? th.coverInk : th.coverInk) : (t.role === "title" && th.accent ? th.accent : th.ink) });
+    if (t.over) box.style.textShadow = `0 ${.02 * ppi}px ${.08 * ppi}px rgba(0,0,0,.55)`;
+    const tx = document.createElement("div"); tx.dataset.ph = TEXT_PH[t.role]; tx.textContent = page.texts[t.role] || "";
+    if (mode === "edit") {
+      try { tx.contentEditable = "plaintext-only"; } catch { tx.contentEditable = "true"; }
+      if (tx.contentEditable !== "plaintext-only") tx.contentEditable = "true";
+      tx.setAttribute("role", "textbox"); tx.setAttribute("aria-label", `${TEXT_PH[t.role].replace("Add ", "")} on page ${pi}`);
+      tx.addEventListener("input", () => { page.texts[t.role] = tx.innerText.replace(/\n$/, ""); queueSave(); syncTextFields(); });
+      tx.addEventListener("blur", () => renderSpreadList());
+      tx.addEventListener("focus", () => { sel = { p: pi, s: -1 }; markSelected(); renderPanels(); });
+    }
+    box.appendChild(tx); el.appendChild(box);
+  });
+  return el;
+}
+function placeImg(img, ph, w, h, slot){
+  const c = crop(ph, w, h, slot);
+  Object.assign(img.style, { width: ph.w * c.s + "px", height: ph.h * c.s + "px", left: -c.sx * c.s + "px", top: -c.sy * c.s + "px" });
+}
+// cover decorations, drawn in inches so the editor and the PDF match
+function decoShapes(kind, W, H){
+  const k = Math.min(W, H) / 8, out = [];
+  if (kind === "baubles") {
+    const xs = [.12, .3, .5, .7, .88], lens = [.55, .25, .85, .35, .62], rs = [.2, .15, .26, .16, .2], cols = ["#D7263D", "#1F6FE5", "#169055", "#D7263D", "#1F6FE5"];
+    xs.forEach((fx, i) => {
+      const x = W * fx, len = lens[i] * k, r = rs[i] * k;
+      out.push({ t: "line", x1: x, y1: 0, x2: x, y2: len, c: "#9AA39D", w: .02 * k });
+      out.push({ t: "rect", x: x - .07 * k, y: len - .02 * k, w: .14 * k, h: .1 * k, c: "#C9A227" });
+      out.push({ t: "circle", x, y: len + .08 * k + r, r, c: cols[i] });
+    });
+  } else if (kind === "bricks") {
+    out.push({ t: "rect", x: 0, y: 0, w: W, h: .42 * k, c: "#0055BF" });
+    ["#DA291C", "#FFD100", "#0055BF", "#DA291C", "#FFD100"].forEach((c, i) => out.push({ t: "rect", x: W * (.08 + i * .19), y: .42 * k, w: W * .14, h: .1 * k, c }));
+  }
+  return out;
+}
+function decoSVG(kind, W, H){
+  return `<svg aria-hidden="true" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">${
+    decoShapes(kind, W, H).map(s => s.t === "line" ? `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.c}" stroke-width="${s.w}"/>`
+      : s.t === "rect" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.c}"/>` : `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.c}"/>`).join("")}</svg>`;
+}
+
+// ---- the open spread ----
+function stagePPI(){
+  const sp = spreads()[spreadIdx], W = D().size.w, H = D().size.h, n = sp[0] === 0 ? 1 : 2;
+  const box = $("stage"), aw = box.clientWidth - 48, ah = box.clientHeight - 150;
+  return Math.max(20, Math.min(aw / (W * n), ah / H, 110));
+}
+function renderStage(){
+  const sps = spreads(); spreadIdx = clamp(spreadIdx, 0, sps.length - 1);
+  const sp = sps[spreadIdx], ppi = stagePPI(), box = $("spread");
+  box.classList.add("editing");
+  box.replaceChildren(...sp.map(pi => renderPage(pi, ppi, "edit")));
+  $("spreadLabel").textContent = sp[0] === 0 ? "Cover" : `Pages ${spreadName(sp)} of ${D().pages.length - 1}`;
+  $("prevSpread").disabled = spreadIdx === 0; $("nextSpread").disabled = spreadIdx === sps.length - 1;
+  const inside = sp[0] !== 0;
+  $("moveLeft").disabled = !inside || spreadIdx <= 1; $("moveRight").disabled = !inside || spreadIdx >= sps.length - 1; $("delSpread").disabled = !inside;
+  renderCtx();
+}
+function markSelected(){ document.querySelectorAll("#spread .slot").forEach(s => s.classList.toggle("sel", !!sel && +s.dataset.p === sel.p && +s.dataset.s === sel.s)); renderCtx(); }
+addEventListener("resize", () => { if (!$("editor").hidden) renderStage(); });
+
+// slot interactions: select, drop a photo, drag to reposition
+function wireSlot(s, inner, pi, si){
+  s.addEventListener("click", () => { if (s.dataset.dragged === "1") { s.dataset.dragged = ""; return; } sel = { p: pi, s: si }; markSelected(); renderPanels(); });
+  s.addEventListener("dragover", e => { if ([...e.dataTransfer.types].includes("text/x-photo")) { e.preventDefault(); s.classList.add("drop"); } });
+  s.addEventListener("dragleave", () => s.classList.remove("drop"));
+  s.addEventListener("drop", e => {
+    e.preventDefault(); s.classList.remove("drop");
+    const id = e.dataTransfer.getData("text/x-photo"); if (!id || !D().photos[id]) return;
+    putPhoto(pi, si, id);
+  });
+  let start = null;
+  s.addEventListener("pointerdown", e => {
+    const page = D().pages[pi], slot = page.slots[si], ph = slot.photo && D().photos[slot.photo];
+    if (!ph || !(sel && sel.p === pi && sel.s === si)) return;
+    const img = inner.querySelector("img"); if (!img) return;
+    start = { x: e.clientX, y: e.clientY, cx: slot.cx, cy: slot.cy, moved: false };
+    s.setPointerCapture(e.pointerId);
+    const w = inner.clientWidth, h = inner.clientHeight;
+    const move = ev => {
+      const c = crop(ph, w, h, slot), dx = (ev.clientX - start.x) / c.s, dy = (ev.clientY - start.y) / c.s;
+      if (Math.abs(ev.clientX - start.x) + Math.abs(ev.clientY - start.y) > 3) start.moved = true;
+      slot.cx = start.cx - dx / ph.w; slot.cy = start.cy - dy / ph.h;
+      const cc = crop(ph, w, h, slot); slot.cx = (cc.sx + cc.sw / 2) / ph.w; slot.cy = (cc.sy + cc.sh / 2) / ph.h;
+      placeImg(img, ph, w, h, slot);
+    };
+    const up = () => { s.removeEventListener("pointermove", move); s.removeEventListener("pointerup", up); s.removeEventListener("pointercancel", up);
+      if (start.moved) { s.dataset.dragged = "1"; queueSave(); renderSpreadList(); } start = null; };
+    s.addEventListener("pointermove", move); s.addEventListener("pointerup", up); s.addEventListener("pointercancel", up);
+  });
+}
+function putPhoto(pi, si, id){
+  const page = D().pages[pi]; ensureSlots(page, si + 1);
+  page.slots[si] = { photo: id, cx: .5, cy: .5, zoom: 1 };
+  // select the next empty frame on this spread, so tapping photos fills a page quickly
+  const sp = spreads()[spreadIdx]; let next = null;
+  for (const p of sp) { if (p === null) continue; const n = geom(D().pages[p].layout, D().size.w, D().size.h, TH()).slots.length;
+    ensureSlots(D().pages[p], n);
+    for (let k = 0; k < n; k++) if (!D().pages[p].slots[k].photo) { next = { p, s: k }; break; } if (next) break; }
+  sel = next || { p: pi, s: si };
+  changed();
+}
+
+// contextual bar above the spread
+function renderCtx(){
+  const box = $("ctx");
+  const slot = sel && sel.s >= 0 && D().pages[sel.p] && D().pages[sel.p].slots[sel.s];
+  if (!slot) { box.innerHTML = `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`; return; }
+  if (!slot.photo) { box.innerHTML = `<span class="hint">Frame selected: tap a photo in <b>Photos</b>, or drag one here.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>`;
+    $("cxPhotos").onclick = () => showTab("photos"); return; }
+  box.innerHTML = `<span class="hint">Drag the photo to reposition.</span>
+    <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600">Zoom <input type="range" id="cxZoom" min="1" max="3" step="0.01" value="${slot.zoom || 1}"></label>
+    <button class="btn small" type="button" id="cxFit">Fit</button><button class="btn small" type="button" id="cxReplace">Replace</button><button class="btn small" type="button" id="cxRemove">Remove</button>`;
+  $("cxZoom").oninput = e => {
+    slot.zoom = +e.target.value;
+    const s = document.querySelector(`#spread .slot[data-p="${sel.p}"][data-s="${sel.s}"]`), img = s && s.querySelector("img"), inner = img && img.parentElement;
+    if (img) { const ph = D().photos[slot.photo]; const c = crop(ph, inner.clientWidth, inner.clientHeight, slot); slot.cx = (c.sx + c.sw / 2) / ph.w; slot.cy = (c.sy + c.sh / 2) / ph.h; placeImg(img, ph, inner.clientWidth, inner.clientHeight, slot); }
+    queueSave();
+  };
+  $("cxZoom").onchange = () => { renderStage(); renderSpreadList(); renderPanels(); };
+  $("cxFit").onclick = () => { slot.zoom = 1; slot.cx = .5; slot.cy = .5; changed(); };
+  $("cxReplace").onclick = () => showTab("photos");
+  $("cxRemove").onclick = () => { slot.photo = null; changed(); };
+}
+
+// ---- left: spreads ----
+function renderSpreadList(){
+  const sps = spreads(), W = D().size.w, H = D().size.h, ppi = 60 / Math.max(W, H);
+  $("spreadList").replaceChildren(...sps.map((sp, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "spread-thumb" + (i === spreadIdx ? " on" : "");
+    b.setAttribute("aria-label", sp[0] === 0 ? "Cover" : `Pages ${spreadName(sp)}`);
+    const pp = document.createElement("div"); pp.className = "pp no-edit";
+    sp.forEach(pi => pp.appendChild(renderPage(pi, ppi, "thumb")));
+    const lab = document.createElement("span"); lab.textContent = spreadName(sp);
+    b.append(pp, lab);
+    b.addEventListener("click", () => { spreadIdx = i; sel = null; renderStage(); renderSpreadList(); renderPanels(); });
+    return b;
+  }));
+}
+$("prevSpread").addEventListener("click", () => { spreadIdx--; sel = null; renderStage(); renderSpreadList(); renderPanels(); });
+$("nextSpread").addEventListener("click", () => { spreadIdx++; sel = null; renderStage(); renderSpreadList(); renderPanels(); });
+$("addPages").addEventListener("click", () => {
+  const p = D().pages, sp = spreads()[spreadIdx];
+  const at = sp[0] === 0 ? 1 : (sp[1] ?? sp[0]) + 1;
+  if (p.length % 2 === 0) p.splice(at, 0, newPage("one")); // keep inside pages in pairs
+  else p.splice(at, 0, newPage("one"), newPage("four"));
+  spreadIdx = Math.min(spreads().length - 1, sp[0] === 0 ? 1 : spreadIdx + 1); sel = null; changed();
+});
+$("moveLeft").addEventListener("click", () => moveSpread(-1));
+$("moveRight").addEventListener("click", () => moveSpread(1));
+function moveSpread(dir){
+  const sps = spreads(), a = sps[spreadIdx], b = sps[spreadIdx + dir]; if (!b || b[0] === 0) return;
+  const p = D().pages, ia = a.filter(x => x !== null), ib = b.filter(x => x !== null);
+  const pa = ia.map(i => p[i]), pb = ib.map(i => p[i]);
+  const first = Math.min(ia[0], ib[0]);
+  const merged = dir < 0 ? [...pa, ...pb] : [...pb, ...pa];
+  p.splice(first, pa.length + pb.length, ...merged);
+  spreadIdx += dir; sel = null; changed();
+}
+armed($("delSpread"), "Delete these pages", () => {
+  const sp = spreads()[spreadIdx]; if (sp[0] === 0) return;
+  const idx = sp.filter(x => x !== null);
+  D().pages.splice(idx[0], idx.length);
+  spreadIdx = Math.max(0, spreadIdx - 1); sel = null; changed();
+});
+
+// ---- right: tool panels ----
+const TABS = ["photos", "layouts", "text", "theme"];
+function showTab(t){ TABS.forEach(x => { $("p-" + x).hidden = x !== t; $("t-" + x).setAttribute("aria-selected", x === t); }); renderPanels(); }
+TABS.forEach(t => $("t-" + t).addEventListener("click", () => showTab(t)));
+function currentPageIdx(){ if (sel) return sel.p; const sp = spreads()[spreadIdx]; return sp[0]; }
+function renderPanels(){
+  const pi = currentPageIdx(), page = D().pages[pi];
+  // layouts
+  if (!$("p-layouts").hidden) {
+    const isCover = pi === 0;
+    $("layoutNote").innerHTML = isCover ? "The cover has its own layout. Pick a theme in <b>Theme</b> to change its look." : `Pick a layout for <b>page ${pi}</b>. Your photos move into the new frames.`;
+    const W = 8, H = 8 * D().size.h / D().size.w;
+    $("layoutGrid").replaceChildren(...(isCover ? [] : LAYOUTS).map(([key, name]) => {
+      const wrap = document.createElement("div");
+      const b = document.createElement("button"); b.type = "button"; b.className = page && page.layout === key ? "on" : ""; b.setAttribute("aria-label", name);
+      b.style.aspectRatio = `${W} / ${H}`;
+      const G = geom(key, W, H, { ...THEMES.classic, margin: .7, gap: .3 });
+      G.slots.forEach(r => b.insertAdjacentHTML("beforeend", `<i style="left:${r.x / W * 100}%; top:${r.y / H * 100}%; width:${r.w / W * 100}%; height:${r.h / H * 100}%"></i>`));
+      G.texts.forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
+      b.addEventListener("click", () => { page.layout = key; sel = null; changed(); });
+      const lab = document.createElement("small"); lab.textContent = name;
+      wrap.append(b, lab); return wrap;
+    }));
+    renderCheck();
+  }
+  // photos
+  if (!$("p-photos").hidden) renderPhotos();
+  // text
+  if (!$("p-text").hidden) {
+    const G = page ? geom(page.layout, D().size.w, D().size.h, TH()) : { texts: [] };
+    $("textNote").innerHTML = G.texts.length ? `Text on <b>${pi === 0 ? "the cover" : "page " + pi}</b>. You can also type straight onto the page.` : `<b>${pi === 0 ? "The cover" : "Page " + pi}</b> has no text in this layout. Try <b>Photo + text</b> or <b>Text only</b> in Layouts.`;
+    $("textFields").replaceChildren(...G.texts.map(t => {
+      const w = document.createElement("div");
+      const id = "tf-" + t.role;
+      w.innerHTML = `<label class="f" for="${id}">${{ title: "Title", caption: "Caption", body: "Text" }[t.role]}</label>`;
+      const inp = document.createElement(t.role === "body" ? "textarea" : "input"); inp.id = id; if (inp.tagName === "INPUT") inp.type = "text";
+      inp.value = page.texts[t.role] || ""; inp.placeholder = TEXT_PH[t.role];
+      inp.addEventListener("input", () => { page.texts[t.role] = inp.value; queueSave(); renderStage(); });
+      w.appendChild(inp); return w;
+    }));
+    $("textScale").value = page ? page.textScale || 1 : 1;
+  }
+  // theme
+  if (!$("p-theme").hidden) {
+    $("themeGrid").replaceChildren(...Object.entries(THEMES).map(([k, t]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = D().theme === k ? "on" : "";
+      b.innerHTML = `<span class="sw" style="background:${t.sample.bg}; color:${t.sample.fg}; font:${t.sample.font}">${t.sample.text}</span><b style="font-size:13px">${t.name}</b>`;
+      b.addEventListener("click", () => { D().theme = k; changed(); });
+      return b;
+    }));
+    $("sizeSel").innerHTML = Object.entries(SIZES).map(([k, s]) => `<option value="${k}" ${D().size.key === k ? "selected" : ""}>${k === "custom" && D().size.key === "custom" ? sizeLabel(D().size) : s.label}</option>`).join("");
+    $("customSize").hidden = D().size.key !== "custom";
+    if (D().size.key === "custom") { $("cw").value = D().size.w; $("ch").value = D().size.h; }
+  }
+  $("sizeLabel").textContent = `${sizeLabel(D().size)} · ${D().pages.length} pages`;
+}
+function syncTextFields(){
+  const pi = currentPageIdx(), page = D().pages[pi]; if (!page || $("p-text").hidden) return;
+  ["title", "caption", "body"].forEach(r => { const f = $("tf-" + r); if (f && document.activeElement !== f) f.value = page.texts[r] || ""; });
+}
+$("textScale").addEventListener("input", e => { const page = D().pages[currentPageIdx()]; if (!page) return; page.textScale = +e.target.value; queueSave(); renderStage(); });
+$("textScale").addEventListener("change", () => renderSpreadList());
+$("sizeSel").addEventListener("change", e => {
+  const k = e.target.value;
+  if (k === "custom") { D().size = { key: "custom", w: D().size.w, h: D().size.h }; }
+  else D().size = { key: k, w: SIZES[k].w, h: SIZES[k].h };
+  changed();
+});
+["cw", "ch"].forEach(id => $(id).addEventListener("change", () => {
+  const w = parseFloat($("cw").value), h = parseFloat($("ch").value);
+  if (w >= 3 && w <= 20 && h >= 3 && h <= 20) { D().size = { key: "custom", w, h }; changed(); }
+}));
+
+// photos panel
+function photoUses(){
+  const n = {};
+  D().pages.forEach(p => { const k = geom(p.layout, D().size.w, D().size.h, TH()).slots.length; p.slots.slice(0, k).forEach(s => { if (s.photo) n[s.photo] = (n[s.photo] || 0) + 1; }); });
+  return n;
+}
+function renderPhotos(){
+  const uses = photoUses(), ids = Object.keys(D().photos);
+  if (!ids.length) { $("photoGrid").innerHTML = '<p class="note" style="grid-column:1/-1">No photos yet.</p>'; return; }
+  $("photoGrid").replaceChildren(...ids.map(id => {
+    const ph = D().photos[id];
+    const b = document.createElement("button"); b.type = "button"; b.draggable = true; b.setAttribute("aria-label", `Photo ${ph.name}${uses[id] ? `, used ${uses[id]} time${uses[id] > 1 ? "s" : ""}` : ""}`);
+    const img = new Image(); img.alt = ""; photoThumbURL(id).then(u => { if (u) img.src = u; });
+    b.appendChild(img);
+    if (uses[id]) b.insertAdjacentHTML("beforeend", `<span class="used">${uses[id]}×</span>`);
+    if (Math.min(ph.w, ph.h) < 1200) b.insertAdjacentHTML("beforeend", '<span class="lowres" title="Small photo: fine for small frames only"></span>');
+    b.addEventListener("dragstart", e => { e.dataTransfer.setData("text/x-photo", id); e.dataTransfer.effectAllowed = "copy"; });
+    b.addEventListener("click", () => {
+      if (!sel || sel.s < 0) { say("upMsg", "Select a frame on the page first, then tap a photo."); return; }
+      putPhoto(sel.p, sel.s, id);
+    });
+    return b;
+  }));
+}
+$("upload").addEventListener("change", async e => {
+  const files = [...(e.target.files || [])]; e.target.value = "";
+  if (!files.length) return;
+  let done = 0, failed = 0;
+  for (const f of files) {
+    say("upMsg", `Uploading ${done + failed + 1} of ${files.length}…`);
+    try { await addPhoto(f); done++; } catch (err) { failed++; console.warn("upload failed", err); }
+    renderPhotos();
+  }
+  say("upMsg", `Added ${done} photo${done === 1 ? "" : "s"}${failed ? `. ${failed} couldn’t be added (use JPEG or PNG under 50 MB).` : "."}`, !!failed);
+  queueSave();
+});
+async function addPhoto(file){
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error("type");
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const w = bmp.width, h = bmp.height, k = Math.min(1, 1000 / Math.max(w, h));
+  const c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height); bmp.close();
+  const thumb = await new Promise(r => c.toBlob(r, "image/jpeg", .85));
+  const id = uid(), ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const orig = `${BOOK.id}/orig/${id}.${ext}`, tpath = `${BOOK.id}/thumb/${id}.jpg`;
+  let r = await sb.storage.from(BUCKET).upload(orig, file, { contentType: file.type, upsert: false }); if (r.error) throw r.error;
+  r = await sb.storage.from(BUCKET).upload(tpath, thumb, { contentType: "image/jpeg", upsert: false }); if (r.error) throw r.error;
+  D().photos[id] = { name: file.name.slice(0, 80), w, h, orig, thumb: tpath, added: Date.now() };
+  thumbURL.set(id, Promise.resolve(URL.createObjectURL(thumb)));
+}
+
+// print check
+function issues(){
+  const out = [], d = D(), th = TH();
+  d.pages.forEach((p, pi) => {
+    const G = geom(p.layout, d.size.w, d.size.h, th); ensureSlots(p, G.slots.length);
+    G.slots.forEach((r, si) => {
+      const s = p.slots[si], inset = th.frame && p.layout !== "full" && !(pi === 0 && th.overCover) ? th.frame.width : 0;
+      if (!s.photo) out.push({ pi, kind: "empty" });
+      else if (d.photos[s.photo] && printPPI(d.photos[s.photo], { w: r.w - 2 * inset, h: r.h - 2 * inset }, s) < LOW_PPI) out.push({ pi, kind: "low" });
+    });
+  });
+  return out;
+}
+function renderCheck(){
+  const iss = issues(), low = iss.filter(x => x.kind === "low"), empty = iss.filter(x => x.kind === "empty");
+  const pages = l => [...new Set(l.map(x => x.pi))].map(p => `<button type="button" data-p="${p}">${p === 0 ? "cover" : p}</button>`).join(", ");
+  $("check").innerHTML = `<p style="font-size:11px; font-weight:600; color:var(--soft); letter-spacing:.5px">PRINT CHECK</p>
+    ${!iss.length ? '<p><i></i>Every page is ready to print.</p>' : ""}
+    ${low.length ? `<p><i class="w"></i><span>${low.length} photo${low.length > 1 ? "s" : ""} may print blurry: page ${pages(low)}</span></p>` : ""}
+    ${empty.length ? `<p><i class="w"></i><span>${empty.length} empty frame${empty.length > 1 ? "s" : ""}: page ${pages(empty)}</span></p>` : ""}`;
+  $("check").querySelectorAll("button[data-p]").forEach(b => b.addEventListener("click", () => { goToPage(+b.dataset.p); }));
+}
+function goToPage(pi){ const i = spreads().findIndex(sp => sp.includes(pi)); if (i >= 0) { spreadIdx = i; sel = null; renderStage(); renderSpreadList(); renderPanels(); } }
+
+function renderAll(){ renderStage(); renderSpreadList(); showTab("layouts"); }
+
+// ===================== preview =====================
+let pvIdx = 0;
+function renderPreview(){
+  const sps = spreads(); pvIdx = clamp(pvIdx, 0, sps.length - 1);
+  const sp = sps[pvIdx], W = D().size.w, H = D().size.h, n = sp[0] === 0 ? 1 : 2;
+  const ppi = Math.min((innerWidth - 80) / (W * n), (innerHeight - 140) / H);
+  const box = $("pvSpread"); box.className = "spread no-edit";
+  box.replaceChildren(...sp.map(pi => renderPage(pi, ppi, "view")));
+  $("pvLabel").textContent = sp[0] === 0 ? "Cover" : `Pages ${spreadName(sp)}`;
+  $("pvPrev").disabled = pvIdx === 0; $("pvNext").disabled = pvIdx === sps.length - 1;
+}
+$("previewBtn").addEventListener("click", () => { pvIdx = spreadIdx; $("preview").hidden = false; renderPreview(); $("pvClose").focus(); });
+$("pvClose").addEventListener("click", () => { $("preview").hidden = true; });
+$("pvPrev").addEventListener("click", () => { pvIdx--; renderPreview(); });
+$("pvNext").addEventListener("click", () => { pvIdx++; renderPreview(); });
+$("preview").addEventListener("keydown", e => {
+  if (e.key === "Escape") $("preview").hidden = true;
+  if (e.key === "ArrowRight" && !$("pvNext").disabled) { pvIdx++; renderPreview(); }
+  if (e.key === "ArrowLeft" && !$("pvPrev").disabled) { pvIdx--; renderPreview(); }
+});
+
+// ===================== PDF export =====================
+let exporting = false, cancelExport = false;
+$("pdfBtn").addEventListener("click", async () => { await flushSave(); $("pdfProgress").hidden = true; $("pdfGo").disabled = false; pdfSummary(); $("pdfDlg").showModal(); });
+$("pdfCancel").addEventListener("click", () => { if (exporting) { cancelExport = true; say("pdfMsg", "Stopping…"); return; } $("pdfDlg").close(); });
+$("pdfDlg").addEventListener("change", pdfSummary);
+function exportOpts(){
+  const dpi = +document.querySelector("input[name=q]:checked").value;
+  return { dpi, bleed: $("optBleed").checked ? 3 / 25.4 : 0, slug: $("optMarks").checked ? .25 : 0, marks: $("optMarks").checked, coverSeparate: $("optCover").checked };
+}
+function pdfSummary(){
+  const o = exportOpts(), W = D().size.w, H = D().size.h, n = D().pages.length;
+  const pw = Math.round((W + 2 * o.bleed + 2 * o.slug) * o.dpi), ph = Math.round((H + 2 * o.bleed + 2 * o.slug) * o.dpi);
+  const mb = Math.round(n * pw * ph * (o.dpi >= 300 ? .16 : .12) / 1048576);
+  const iss = issues(), low = iss.filter(x => x.kind === "low").length, empty = iss.filter(x => x.kind === "empty").length;
+  $("pdfSummary").innerHTML = `<span><b>${n} pages</b> (cover + ${n - 1}) · ${esc(sizeLabel(D().size))}</span>
+    <span>${pw.toLocaleString()} × ${ph.toLocaleString()} px per page${o.bleed ? " with bleed" : ""}</span>
+    <span style="color:var(--soft)">Estimated file: about ${Math.max(1, mb)} MB${o.coverSeparate ? " (two files: cover and inside pages)" : ""}</span>
+    ${low ? `<span class="w">${low} photo${low > 1 ? "s are" : " is"} below print quality. Check the Print check list.</span>` : ""}
+    ${empty ? `<span class="w">${empty} empty frame${empty > 1 ? "s" : ""} will print blank.</span>` : ""}
+    ${(D().pages.length - 1) % 2 ? '<span class="w">Odd number of inside pages: most printers need an even number.</span>' : ""}`;
+}
+async function loadJsPDF(){
+  if (window.jspdf) return;
+  await new Promise((ok, fail) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"; s.onload = ok; s.onerror = () => fail(new Error("Couldn’t load the PDF maker. Check your connection.")); document.head.appendChild(s); });
+}
+// draw one page at print resolution: a canvas of (page + bleed + slug) at dpi
+async function drawPage(pi, o){
+  const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = pi === 0;
+  const b = o.bleed, sl = o.slug, dpi = o.dpi;
+  const cw = Math.round((W + 2 * b + 2 * sl) * dpi), ch = Math.round((H + 2 * b + 2 * sl) * dpi);
+  const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext("2d", { alpha: false });
+  ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, cw, ch);
+  const X = v => (v + sl + b) * dpi; // inches on the trimmed page -> canvas pixels
+  ctx.fillStyle = isCover ? th.coverBg : th.bg; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
+  const G = geom(page.layout, W, H, th); ensureSlots(page, G.slots.length);
+  if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
+  for (const [si, r0] of G.slots.entries()) {
+    const slot = page.slots[si];
+    // frames that touch the trim edge run into the bleed
+    const r = { ...r0 }, e = .001;
+    if (r.x <= e) { r.w += r.x + b; r.x = -b; }
+    if (r.y <= e) { r.h += r.y + b; r.y = -b; }
+    if (r0.x + r0.w >= W - e) r.w = W + b - r.x;
+    if (r0.y + r0.h >= H - e) r.h = H + b - r.y;
+    let inset = 0;
+    if (th.frame && page.layout !== "full" && !(isCover && th.overCover)) {
+      inset = th.frame.width;
+      ctx.save();
+      if (th.frame.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
+      ctx.fillStyle = th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
+      ctx.fillRect(X(r.x), X(r.y), r.w * dpi, r.h * dpi);
+      ctx.restore();
+    }
+    if (!slot.photo || !d.photos[slot.photo]) continue;
+    const ph = d.photos[slot.photo], iw = r.w - 2 * inset, ih = r.h - 2 * inset;
+    // crop is computed on the visible (trim) frame so the PDF matches the editor; bleed adds a little extra around it
+    const vis = { w: r0.w - 2 * inset, h: r0.h - 2 * inset };
+    const c = crop(ph, vis.w, vis.h, slot), sPerIn = c.sw / vis.w; // photo px per inch
+    const bmp = await loadOriginal(slot.photo);
+    const kx = bmp.width / ph.w, ky = bmp.height / ph.h;
+    let sx = c.sx - (r0.x - r.x) * sPerIn, sy = c.sy - (r0.y - r.y) * sPerIn, sw = iw * sPerIn, sh = ih * sPerIn;
+    // keep inside the photo; if bleed asks for more than there is, stretch the last bit very slightly
+    if (sx < 0) { sw += sx; sx = 0; } if (sy < 0) { sh += sy; sy = 0; }
+    sw = Math.min(sw, ph.w - sx); sh = Math.min(sh, ph.h - sy);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
+    bmp.close();
+  }
+  for (const t of G.texts) {
+    const txt = (page.texts[t.role] || "").trim(); if (!txt) continue;
+    const st = th[t.role] || th.body, size = t.size * (page.textScale || 1) / 72 * dpi;
+    ctx.save();
+    ctx.font = `${st.style} ${st.weight} ${size}px "${st.family}"`;
+    ctx.fillStyle = t.over ? "#FFFFFF" : isCover ? th.coverInk : (t.role === "title" && th.accent ? th.accent : th.ink);
+    if (t.over) { ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = .08 * dpi; ctx.shadowOffsetY = .02 * dpi; }
+    ctx.textBaseline = "middle"; ctx.textAlign = t.align === "center" ? "center" : "left";
+    const lines = wrapLines(ctx, txt, t.rect.w * dpi), lh = size * 1.25, total = lines.length * lh;
+    let y = X(t.rect.y) + (t.rect.h * dpi - total) / 2 + lh / 2;
+    const x = t.align === "center" ? X(t.rect.x + t.rect.w / 2) : X(t.rect.x);
+    lines.forEach(l => { ctx.fillText(l, x, y); y += lh; });
+    ctx.restore();
+  }
+  if (o.marks) drawCropMarks(ctx, W, H, X, b, sl, dpi);
+  return cv;
+}
+function wrapLines(ctx, text, maxW){
+  const out = [];
+  text.split("\n").forEach(par => {
+    const words = par.split(/\s+/); let line = "";
+    words.forEach(w => {
+      const test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxW && line) { out.push(line); line = w; } else line = test;
+    });
+    out.push(line);
+  });
+  return out;
+}
+function drawDeco(ctx, kind, W, H, X, dpi){
+  decoShapes(kind, W, H).forEach(s => {
+    ctx.save();
+    if (s.t === "line") { ctx.strokeStyle = s.c; ctx.lineWidth = s.w * dpi; ctx.beginPath(); ctx.moveTo(X(s.x1), X(s.y1) - 1); ctx.lineTo(X(s.x2), X(s.y2)); ctx.stroke(); }
+    else if (s.t === "rect") { ctx.fillStyle = s.c; ctx.fillRect(X(s.x), X(s.y), s.w * dpi, s.h * dpi); }
+    else { ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(X(s.x), X(s.y), s.r * dpi, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  });
+}
+function drawCropMarks(ctx, W, H, X, b, sl, dpi){
+  ctx.save(); ctx.strokeStyle = "#000000"; ctx.lineWidth = Math.max(1, .25 / 72 * dpi);
+  const len = (sl - .06) * dpi, gapIn = b + .04;
+  [[0, 0], [W, 0], [0, H], [W, H]].forEach(([x, y]) => {
+    const hx = x === 0 ? -1 : 1, vy = y === 0 ? -1 : 1;
+    ctx.beginPath();
+    ctx.moveTo(X(x + hx * gapIn), X(y)); ctx.lineTo(X(x + hx * gapIn) + hx * len, X(y));
+    ctx.moveTo(X(x), X(y + vy * gapIn)); ctx.lineTo(X(x), X(y + vy * gapIn) + vy * len);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+$("pdfGo").addEventListener("click", async () => {
+  if (exporting) return;
+  const o = exportOpts(), d = D();
+  exporting = true; cancelExport = false; $("pdfGo").disabled = true; $("pdfProgress").hidden = false; $("pdfCancel").textContent = "Stop";
+  const setP = (msg, frac) => { say("pdfMsg", msg); $("pdfBar").style.width = Math.round(frac * 100) + "%"; };
+  try {
+    setP("Getting ready…", 0);
+    await loadJsPDF(); await fontsReady();
+    const { jsPDF } = window.jspdf;
+    const PW = d.size.w + 2 * o.bleed + 2 * o.slug, PH = d.size.h + 2 * o.bleed + 2 * o.slug, orient = PW > PH ? "landscape" : "portrait";
+    const all = d.pages.map((_, i) => i);
+    const groups = o.coverSeparate ? [["cover", [0]], ["pages", all.slice(1)]] : [["book", all]];
+    const base = (BOOK.title || "photobook").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "photobook";
+    let done = 0;
+    for (const [part, idx] of groups) {
+      if (!idx.length) continue;
+      const doc = new jsPDF({ unit: "in", format: [PW, PH], orientation: orient, compress: true });
+      doc.setProperties({ title: `${BOOK.title}${part === "cover" ? " (cover)" : ""}`, creator: "Photobook" });
+      for (const [k, pi] of idx.entries()) {
+        if (cancelExport) throw new Error("Stopped.");
+        setP(`Making ${pi === 0 ? "the cover" : `page ${pi} of ${d.pages.length - 1}`}…`, done / d.pages.length);
+        const cv = await drawPage(pi, o);
+        const url = cv.toDataURL("image/jpeg", o.dpi >= 300 ? .93 : .85);
+        cv.width = cv.height = 1;
+        if (k) doc.addPage([PW, PH], orient);
+        doc.addImage(url, "JPEG", 0, 0, PW, PH, undefined, "NONE");
+        done++;
+        await new Promise(r => setTimeout(r, 0));
+      }
+      setP("Saving the file…", done / d.pages.length);
+      doc.save(`${base}${groups.length > 1 ? "-" + part : ""}-${o.dpi}dpi.pdf`);
+    }
+    setP(`Done. Check your Downloads folder.`, 1);
+  } catch (err) {
+    say("pdfMsg", (err && err.message === "Stopped.") ? "Stopped. Nothing was saved." : "Couldn’t make the PDF. " + errText(err), true);
+  } finally {
+    exporting = false; $("pdfGo").disabled = false; $("pdfCancel").textContent = "Close";
+  }
+});
+
+// ===================== start =====================
+(async () => {
+  if (!sb) { show("noConfig"); return; }
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  sb.auth.onAuthStateChange((_e, s) => { session = s; });
+  if (!session) { show("signin"); $("s-email").focus(); return; }
+  const m = location.hash.match(/^#book=([\w-]{8,})$/);
+  if (m) openBook(m[1]); else openLibrary();
+})();
+</script>
 </body></html>
