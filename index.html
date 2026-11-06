@@ -111,6 +111,18 @@ h1,h2{margin:0}
 .photo-grid .used{position:absolute; right:4px; bottom:4px; padding:0 6px; border-radius:999px; background:rgba(0,0,0,.6); color:#FFFFFF; font-size:10.5px; font-weight:700}
 .photo-grid .lowres{position:absolute; left:4px; top:4px; width:10px; height:10px; border-radius:50%; background:#C98A12; border:2px solid #FFFFFF}
 .upl{display:flex; flex-direction:column; gap:6px}
+.auopts{display:flex; gap:8px; flex-wrap:wrap}
+.auopts label{display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:9px; padding:8px 12px; font-size:13.5px; font-weight:600; cursor:pointer; margin:0}
+.auopts label:has(input:checked){border-color:var(--blue); background:#F4F7FF; box-shadow:inset 0 0 0 1px var(--blue)}
+.auopts input{margin:0; width:16px; height:16px; accent-color:var(--blue)}
+.aubar{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:4px; font-size:13px}
+.aupick{display:grid; grid-template-columns:repeat(auto-fill, minmax(62px, 1fr)); gap:6px; margin-top:8px; max-height:210px; overflow-y:auto; padding:2px}
+.aupick button{position:relative; display:block; width:100%; aspect-ratio:1; padding:0; border:2px solid transparent; border-radius:7px; overflow:hidden; background:#ECEDF0}
+.aupick button img{width:100%; height:100%; object-fit:cover; display:block}
+.aupick button[aria-pressed="false"] img{opacity:.35}
+.aupick button[aria-pressed="true"]{border-color:var(--blue)}
+.aupick button[aria-pressed="true"]::after{content:"✓"; position:absolute; right:3px; top:3px; width:18px; height:18px; border-radius:50%; background:var(--blue); color:#FFFFFF; font-size:12px; line-height:18px; text-align:center; font-weight:800}
+.aupick .inb{position:absolute; left:3px; bottom:3px; font-size:10px; font-weight:700; background:rgba(0,0,0,.62); color:#FFFFFF; border-radius:4px; padding:0 4px}
 .themes{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px}
 .themes button{border:1px solid var(--line); border-radius:10px; padding:8px; background:#FFFFFF; display:flex; flex-direction:column; gap:6px; align-items:stretch; text-align:left}
 .themes button.on{border:2px solid var(--blue); background:var(--blue-bg)}
@@ -300,6 +312,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       <div class="panel" id="p-photos" hidden="">
         <div class="upl">
           <label class="btn dark" style="justify-content:center">+ Add photos<input id="upload" type="file" accept="image/jpeg,image/png,image/webp" multiple="" hidden=""></label>
+          <button class="btn" type="button" id="autoBtn" style="justify-content:center">Auto layout…</button>
           <p class="note" style="margin:0">Full-size originals are kept for printing. Drag a photo onto a frame, or select a frame and tap a photo.</p>
           <p class="msg" id="upMsg" role="status" style="margin:0"></p>
         </div>
@@ -364,6 +377,36 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
     <div id="pdfProgress" hidden=""><p class="msg" id="pdfMsg" style="margin:12px 0 0"></p><div class="bar"><div id="pdfBar"></div></div></div>
   </div>
   <div class="dlg-acts"><button class="btn" type="button" id="pdfCancel">Close</button><button class="btn dark" type="button" id="pdfGo">Create PDF</button></div>
+</dialog>
+
+<!-- auto layout -->
+<dialog id="autoDlg" aria-labelledby="autoTitle">
+  <div class="dlg-body">
+    <h2 id="autoTitle">Auto layout</h2>
+    <p class="sub">Places photos on pages for you. Covers and photos already on pages stay put, and Undo puts everything back in one step.</p>
+    <label class="f">Photos per page</label>
+    <div class="auopts">
+      <label><input type="radio" name="auDensity" value="big">Fewer, bigger</label>
+      <label><input type="radio" name="auDensity" value="balanced" checked="">Balanced</label>
+      <label><input type="radio" name="auDensity" value="small">More, smaller</label>
+    </div>
+    <label class="f">Order</label>
+    <div class="auopts">
+      <label><input type="radio" name="auOrder" value="taken" checked="">Date taken</label>
+      <label><input type="radio" name="auOrder" value="added">Upload order</label>
+    </div>
+    <label class="f">Where</label>
+    <div class="auopts">
+      <label><input type="radio" name="auWhere" value="pages" checked="">Empty frames, then new pages</label>
+      <label><input type="radio" name="auWhere" value="fill">Empty frames only</label>
+    </div>
+    <label class="f">Photos</label>
+    <div class="aubar"><span id="auCount" style="font-weight:700; margin-right:auto"></span>
+      <button class="btn small" type="button" id="auUnused">Not in the book yet</button><button class="btn small" type="button" id="auAll">All</button><button class="btn small" type="button" id="auNone">None</button></div>
+    <div class="aupick" id="auPick"></div>
+    <p class="msg" id="auMsg" role="status"></p>
+  </div>
+  <div class="dlg-acts"><button class="btn" type="button" id="auCancel">Cancel</button><button class="btn dark" type="button" id="auGo">Arrange photos</button></div>
 </dialog>
 
 <!-- preview -->
@@ -1739,6 +1782,186 @@ $("sizeSel").addEventListener("change", e => {
 }));
 
 // photos panel
+// ===================== auto layout =====================
+// when a JPEG was taken (EXIF DateTimeOriginal, else DateTime); 0 when it doesn't say
+function exifDate(buf){
+  try {
+    const v = new DataView(buf); if (v.getUint16(0) !== 0xFFD8) return 0;
+    let o = 2;
+    while (o + 10 < v.byteLength) {
+      const m = v.getUint16(o), len = v.getUint16(o + 2);
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = q => v.getUint16(t + q, le), u32 = q => v.getUint32(t + q, le);
+        const tags = ifd => { const out = {}, n = u16(ifd); for (let i = 0; i < n; i++) { const e = ifd + 2 + i * 12; out[u16(e)] = e; } return out; };
+        const str = e => { const c = u32(e + 4), off = c > 4 ? u32(e + 8) : e + 8; let r = ""; for (let i = 0; i < c - 1 && i < 40; i++) r += String.fromCharCode(v.getUint8(t + off + i)); return r; };
+        const ifd0 = tags(u32(4)); let ent = null;
+        if (ifd0[0x8769]) { const ex = tags(u32(ifd0[0x8769] + 8)); ent = ex[0x9003] || ex[0x9004] || null; }
+        if (!ent && ifd0[0x0132]) ent = ifd0[0x0132];
+        if (!ent) return 0;
+        const d = /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/.exec(str(ent));
+        return d && +d[1] > 1900 ? new Date(+d[1], d[2] - 1, +d[3], +d[4], +d[5], +d[6]).getTime() : 0;
+      }
+      if ((m & 0xFF00) !== 0xFF00 || m === 0xFFDA) break;
+      o += 2 + len;
+    }
+  } catch (e) {}
+  return 0;
+}
+// photos uploaded before dates were saved: read just the start of the original once
+async function ensureDates(ids, prog){
+  const need = ids.filter(id => D().photos[id] && D().photos[id].taken === undefined);
+  let done = 0;
+  const one = async id => {
+    const ph = D().photos[id];
+    try {
+      if (!/\.jpe?g$/i.test(ph.orig)) ph.taken = 0;
+      else {
+        const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(ph.orig, 300); if (error) throw error;
+        const r = await fetch(data.signedUrl, { headers: { Range: "bytes=0-262143" } }); if (!r.ok) throw new Error("HTTP " + r.status);
+        ph.taken = exifDate(await r.arrayBuffer());
+      }
+    } catch (e) { console.warn("couldn't read photo date", e); }
+    prog(++done, need.length);
+  };
+  for (let k = 0; k < need.length; k += 4) await Promise.all(need.slice(k, k + 4).map(one));
+}
+// photo-only inside layouts (captions allowed) and their frames at this book's size
+function autoLayouts(){
+  const W = D().size.w, H = D().size.h, out = [];
+  LAYOUTS.forEach(([k]) => { const G = geom(k, W, H, pageTheme(newPage(k))); if (G.slots.length && G.texts.every(t => t.role === "caption")) out.push({ k, rects: G.slots }); });
+  return out;
+}
+// pair photos with frames by shape: the widest photo goes in the widest frame, and so on
+function pairUp(rects, ids){
+  const ph = D().photos;
+  const fa = rects.map((r, i) => [Math.log(r.w / r.h), i]).sort((a, b) => a[0] - b[0]);
+  const pa = ids.map(id => [Math.log(ph[id].w / ph[id].h), id]).sort((a, b) => a[0] - b[0]);
+  if (pa.length < fa.length) { // fewer photos than frames: use the frames that suit them best, in shape order
+    const pick = []; let f = 0;
+    pa.forEach((x, k) => { const room = fa.length - (pa.length - k); let best = f;
+      for (let j = f; j <= room; j++) if (Math.abs(fa[j][0] - x[0]) < Math.abs(fa[best][0] - x[0])) best = j;
+      pick.push(fa[best]); f = best + 1; });
+    return inOrder(rects, ids, pa.map((x, k) => [pick[k][1], x[1]]));
+  }
+  return inOrder(rects, ids, pa.map((x, k) => [fa[k][1], x[1]]));
+}
+// frames of the same shape take their photos in order, reading left to right, top to bottom
+function inOrder(rects, ids, pairs){
+  const asp = fi => Math.log(rects[fi].w / rects[fi].h), byA = pairs.slice().sort((a, b) => asp(a[0]) - asp(b[0])), out = [];
+  for (let i = 0; i < byA.length;) {
+    let j = i + 1; while (j < byA.length && asp(byA[j][0]) - asp(byA[j - 1][0]) < .06) j++;
+    const grp = byA.slice(i, j), fr = grp.map(x => x[0]).sort((a, b) => (rects[a].y - rects[b].y > .05 ? 1 : rects[b].y - rects[a].y > .05 ? -1 : rects[a].x - rects[b].x));
+    const ph = grp.map(x => x[1]).sort((a, b) => ids.indexOf(a) - ids.indexOf(b));
+    fr.forEach((f, k) => out.push([f, ph[k]])); i = j;
+  }
+  return out;
+}
+const AUTO_SIZES = { big: [1, 2, 1, 3, 2], balanced: [3, 2, 4, 1, 3, 4, 2], small: [4, 6, 5, 4, 6, 3] };
+function planGroups(ids, dens, byTime, counts){
+  const ph = D().photos, pattern = AUTO_SIZES[dens].filter(n => counts.includes(n)), groups = [];
+  const low = id => Math.min(ph[id].w, ph[id].h) < 1200;
+  let i = 0, step = 0;
+  while (i < ids.length) {
+    const left = ids.length - i; let n = Math.min(pattern[step++ % pattern.length], left);
+    if (n === 1 && low(ids[i]) && left > 1) n = 2; // small photos don't get a page to themselves
+    if (byTime && left > n) { // end the page where there's the biggest time gap, so moments stay together
+      const gap = k => (ph[ids[i + k]].taken && ph[ids[i + k - 1]].taken) ? ph[ids[i + k]].taken - ph[ids[i + k - 1]].taken : 0;
+      let best = n;
+      for (const m of [n - 1, n + 1]) if (m >= 1 && m < left && counts.includes(m) && gap(m) > gap(best) + 30 * 60e3) best = m;
+      n = best;
+    }
+    while (!counts.includes(n) && n > 1) n--;
+    groups.push(ids.slice(i, i + n)); i += n;
+  }
+  return groups;
+}
+function buildPages(groups, lays){
+  const ph = D().photos, recent = [];
+  return groups.map(g => {
+    if (!g.length) return newPage("text");
+    let best = null;
+    lays.filter(l => l.rects.length === g.length).forEach(l => {
+      const pairs = pairUp(l.rects, g); let sc = 0;
+      pairs.forEach(([fi, id]) => { const r = l.rects[fi], P = ph[id];
+        sc += Math.abs(Math.log(r.w / r.h) - Math.log(P.w / P.h));
+        if (Math.min(P.w / r.w, P.h / r.h) < LOW_PPI) sc += 2; });
+      sc = sc / g.length + recent.filter(k => k === l.k).length * .3 + (recent[recent.length - 1] === l.k ? .45 : 0);
+      if (!best || sc < best.sc) best = { l, sc, pairs };
+    });
+    recent.push(best.l.k); if (recent.length > 4) recent.shift();
+    const pg = newPage(best.l.k);
+    best.pairs.forEach(([fi, id]) => setSlotPhoto(pg, fi, { photo: id, cx: .5, cy: .5, zoom: 1 }));
+    return pg;
+  });
+}
+const radioVal = n => (document.querySelector(`input[name="${n}"]:checked`) || {}).value;
+let AU_PICK = new Set();
+function renderAutoPick(){
+  const uses = photoUses(), ids = Object.keys(D().photos);
+  $("auCount").textContent = `${AU_PICK.size} of ${ids.length} photo${ids.length === 1 ? "" : "s"} selected`;
+  $("auPick").replaceChildren(...ids.map(id => {
+    const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-pressed", AU_PICK.has(id));
+    b.setAttribute("aria-label", `${D().photos[id].name}${uses[id] ? ", already in the book" : ""}`);
+    const img = new Image(); img.alt = ""; photoThumbURL(id).then(u => { if (u) img.src = u; }); b.appendChild(img);
+    if (uses[id]) b.insertAdjacentHTML("beforeend", '<span class="inb">in book</span>');
+    b.onclick = () => { AU_PICK.has(id) ? AU_PICK.delete(id) : AU_PICK.add(id); b.setAttribute("aria-pressed", AU_PICK.has(id)); $("auCount").textContent = `${AU_PICK.size} of ${ids.length} photo${ids.length === 1 ? "" : "s"} selected`; };
+    return b;
+  }));
+}
+const unusedIds = () => { const u = photoUses(); return Object.keys(D().photos).filter(id => !u[id]); };
+$("autoBtn").addEventListener("click", () => {
+  if (!Object.keys(D().photos).length) { say("upMsg", "Add some photos first, then use Auto layout."); return; }
+  AU_PICK = new Set(unusedIds());
+  say("auMsg", AU_PICK.size ? "" : "Every photo is already in the book. Tap All or pick photos to place them again.");
+  $("auGo").disabled = false; renderAutoPick(); $("autoDlg").showModal();
+});
+$("auUnused").onclick = () => { AU_PICK = new Set(unusedIds()); renderAutoPick(); };
+$("auAll").onclick = () => { AU_PICK = new Set(Object.keys(D().photos)); renderAutoPick(); };
+$("auNone").onclick = () => { AU_PICK = new Set(); renderAutoPick(); };
+$("auCancel").onclick = () => $("autoDlg").close();
+$("auGo").addEventListener("click", async () => {
+  const keys = Object.keys(D().photos), ids = keys.filter(id => AU_PICK.has(id));
+  if (!ids.length) return say("auMsg", "Pick at least one photo.", true);
+  const order = radioVal("auOrder"), dens = radioVal("auDensity"), addPages = radioVal("auWhere") === "pages";
+  $("auGo").disabled = true;
+  if (order === "taken") await ensureDates(ids, (n, t) => say("auMsg", `Reading photo dates… ${n} of ${t}`));
+  const ph = D().photos, up = (a, b) => ((ph[a].added || 0) - (ph[b].added || 0)) || (keys.indexOf(a) - keys.indexOf(b));
+  const seq = ids.slice().sort(order === "taken" ? (a, b) => ((ph[a].taken || Infinity) - (ph[b].taken || Infinity)) || up(a, b) : up);
+  // 1. empty frames on inside pages, in page order
+  const p = D().pages, queue = seq.slice(), touched = [];
+  for (let pi = 1; pi < p.length && queue.length; pi++) {
+    if (isCoverPage(pi)) continue;
+    const page = p[pi], G = pageGeom(page), empty = [];
+    G.slots.forEach((r, si) => { const sd = slotAt(page, si); if (sd && !sd.photo) empty.push(si); });
+    if (!empty.length) continue;
+    const take = queue.splice(0, empty.length);
+    pairUp(empty.map(si => G.slots[si]), take).forEach(([fi, id]) => setSlotPhoto(page, empty[fi], { photo: id, cx: .5, cy: .5, zoom: 1 }));
+    touched.push(pi);
+  }
+  // 2. new pages for the rest, before the back cover, keeping inside pages in pairs
+  let added = [];
+  if (addPages && queue.length) {
+    const lays = autoLayouts(), counts = [...new Set(lays.map(l => l.rects.length))];
+    const groups = planGroups(queue, dens, order === "taken", counts);
+    if ((insideCount() + groups.length) % 2) {
+      let gi = -1; groups.forEach((g, k) => { if (g.length >= 2 && (gi < 0 || g.length >= groups[gi].length)) gi = k; });
+      if (gi >= 0) { const g = groups[gi], h = Math.ceil(g.length / 2); groups.splice(gi, 1, g.slice(0, h), g.slice(h)); } else groups.push([]);
+    }
+    added = buildPages(groups, lays);
+    const at = isBack(p.length - 1) ? p.length - 1 : p.length;
+    p.splice(at, 0, ...added); touched.push(at);
+    queue.length = 0;
+  }
+  const placed = seq.length - queue.length;
+  $("autoDlg").close();
+  if (touched.length) { const first = Math.min(...touched); spreadIdx = Math.max(0, spreads().findIndex(sp => sp.includes(first))); }
+  sel = null; changed();
+  say("upMsg", placed
+    ? `Placed ${placed} photo${placed === 1 ? "" : "s"}${added.length ? ` and added ${added.length} pages` : ""}.${queue.length ? ` ${queue.length} didn’t fit: choose “Empty frames, then new pages” to place them.` : ""} Ctrl+Z undoes it.`
+    : "There were no empty frames. Choose “Empty frames, then new pages” to add pages.", !placed);
+});
+
 function photoUses(){
   const n = {};
   D().pages.forEach(p => { const k = pageGeom(p).slots.length; for (let i = 0; i < k; i++) { const s = slotAt(p, i); if (s && s.photo) n[s.photo] = (n[s.photo] || 0) + 1; } if (hasBg(p)) n[p.bg.photo] = (n[p.bg.photo] || 0) + 1; });
@@ -1786,7 +2009,8 @@ async function addPhoto(file){
   const orig = `${BOOK.id}/orig/${id}.${ext}`, tpath = `${BOOK.id}/thumb/${id}.jpg`;
   let r = await sb.storage.from(BUCKET).upload(orig, file, { contentType: file.type, upsert: false }); if (r.error) throw r.error;
   r = await sb.storage.from(BUCKET).upload(tpath, thumb, { contentType: "image/jpeg", upsert: false }); if (r.error) throw r.error;
-  D().photos[id] = { name: file.name.slice(0, 80), w, h, orig, thumb: tpath, added: Date.now() };
+  let taken = 0; if (file.type === "image/jpeg") { try { taken = exifDate(await file.slice(0, 262144).arrayBuffer()); } catch (e) {} }
+  D().photos[id] = { name: file.name.slice(0, 80), w, h, orig, thumb: tpath, added: Date.now(), taken };
   thumbURL.set(id, Promise.resolve(URL.createObjectURL(thumb)));
 }
 
