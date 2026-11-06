@@ -477,14 +477,17 @@ const LAYOUTS = LAYOUT_GROUPS.flatMap(g => g[1]);
 // front and back covers have their own set
 const COVER_LAYOUTS = [
   ["cover", "Photo + title"], ["coverFull", "Full photo"], ["coverTitleTop", "Title on top"],
-  ["coverFramed", "Framed photo"], ["coverCollage", "Collage"], ["coverTitleOnly", "Title only"]
+  ["coverFramed", "Framed photo"], ["coverCollage", "Collage"], ["coverTitleOnly", "Title only"],
+  ["coverCutout", "Big word"], ["coverSplit", "Side panel"], ["coverVeil", "Soft photo"],
+  ["coverPhotoTop", "Photo + script"], ["coverWindow", "Square window"], ["coverBand", "Side title"]
 ];
+const NO_DECO = new Set(["coverVeil", "coverPhotoTop", "coverBand"]);
 const LAYOUT_NAME = Object.fromEntries([...LAYOUTS, ...COVER_LAYOUTS]);
 
 // Where the frames and text boxes go on a page, in inches from the page's top-left (trim) corner
 function geom(layout, W, H, th){
   const m = th.margin, g = th.gap, ix = m, iy = m, iw = W - 2 * m, ih = H - 2 * m;
-  const R = (x, y, w, h) => ({ x, y, w, h });
+  const R = (x, y, w, h, more) => ({ x, y, w, h, ...(more || {}) });
   const k = Math.min(W, H) / 8; // text scales with the page
   const cap = .55 * k;
   const gridOf = (cols, rows) => { const w = (iw - g * (cols - 1)) / cols, h = (ih - g * (rows - 1)) / rows, sl = [];
@@ -495,6 +498,41 @@ function geom(layout, W, H, th){
     { role: "title", rect: R(ix, y, iw, ih * .2), size: 40 * k, align: "center" },
     { role: "caption", rect: R(ix, y + ih * .21, iw, ih * .11), size: 13 * k, align: "center" }];
   switch (layout) {
+    // ---- covers modelled on classic photobook designs ----
+    case "coverCutout": { // a big word cut out of the bottom of the photo, script title below
+      const w = iw * .66, h = ih * .58 - off, x = ix + (iw - w) / 2, y = iy + off + ih * .02, wh = h * .3;
+      return { slots: [R(x, y, w, h)], texts: [
+        { role: "body", rect: R(x, y + h - wh * .92, w, wh), size: wh * 72 * .95, align: "center", ph: "one", look: { font: "Lilita One", color: "bg", lh: 1, italic: false } },
+        { role: "title", rect: R(ix, iy + ih * .7, iw, ih * .15), size: 36 * k, align: "center", look: { font: "Great Vibes", italic: false } },
+        { role: "caption", rect: R(ix, iy + ih * .86, iw, ih * .08), size: 12 * k, align: "center", ph: "Date", look: { font: "Montserrat", spacing: .08, italic: false } }] };
+    }
+    case "coverSplit": { // plain panel with the names on one side, photo to the edge on the other
+      const pw = W * .42, tx = m * .8, tw = pw - 2 * tx;
+      return { slots: [R(pw, 0, W - pw, H, { bare: true })], texts: [
+        { role: "body", rect: R(tx, H * .27, tw, H * .07), size: 9.5 * k, align: "center", ph: "Our love story", look: { font: "Cormorant Garamond", upper: true, spacing: .22, italic: false } },
+        { role: "title", rect: R(tx, H * .36, tw, H * .27), size: 28 * k, align: "center", ph: "Names", look: { font: "Cormorant Garamond", upper: true, spacing: .06, lh: 1.15, italic: false } },
+        { role: "caption", rect: R(tx, H * .66, tw, H * .07), size: 10 * k, align: "center", ph: "Date", look: { font: "Cormorant Garamond", spacing: .2, italic: false } }] };
+    }
+    case "coverVeil": // the photo fills the cover, softened at the top so a script title sits on it
+      return { slots: [R(0, 0, W, H, { bare: true, wash: { a: .6, to: .5 } })], texts: [
+        { role: "caption", rect: R(ix, m * .7, iw, H * .07), size: 11 * k, align: "center", ph: "Our wedding", look: { font: "Cormorant Garamond", upper: true, spacing: .25, italic: false } },
+        { role: "title", rect: R(ix, H * .3, iw, H * .26), size: 56 * k, align: "center", ph: "Names", look: { font: "Great Vibes", italic: false } }] };
+    case "coverPhotoTop": // photo across the top, a big script line overlapping its edge
+      return { slots: [R(0, 0, W, H * .62, { bare: true })], texts: [
+        { role: "title", rect: R(ix, H * .5, iw, H * .22), size: 62 * k, align: "center", look: { font: "Great Vibes", lh: 1, italic: false } },
+        { role: "caption", rect: R(ix, H * .73, iw, H * .16), size: 11 * k, align: "center", ph: "Names · date", look: { font: "Montserrat", upper: true, spacing: .18, lh: 1.7, italic: false } }] };
+    case "coverWindow": { // a square photo window with a rounded name underneath
+      const sd = Math.min(iw * .58, (ih - off) * .52), x = ix + (iw - sd) / 2, y = iy + off + (ih - off) * .08;
+      return { slots: [R(x, y, sd, sd)], texts: [
+        { role: "title", rect: R(ix, y + sd + ih * .05, iw, ih * .14), size: 40 * k, align: "center", ph: "Name", look: { font: "Nunito", bold: true, italic: false } },
+        { role: "caption", rect: R(ix, y + sd + ih * .19, iw, ih * .07), size: 12 * k, align: "center", look: { font: "Nunito", upper: true, spacing: .08, bold: true, italic: false } }] };
+    }
+    case "coverBand": { // a band down the side with the title running up it, photo to the edge
+      const bw = W * .3, tw = bw * .5;
+      return { slots: [R(bw, 0, W - bw, H, { bare: true })], texts: [
+        { role: "title", rect: R(bw * .1, m, tw, H - 2 * m), size: tw * 72 * .78, align: "center", rot: -90, ph: "Wedding", look: { font: "Playfair Display", upper: true, spacing: .03, lh: 1, bold: false, italic: false } },
+        { role: "caption", rect: R(bw * .1 + tw, m, bw * .26, H - 2 * m), size: 13 * k, align: "center", rot: -90, ph: "Names / date", look: { font: "Cormorant Garamond", italic: false, lh: 1.1 } }] };
+    }
     case "coverFull": return { slots: [R(0, 0, W, H)], texts: [
       { role: "title", rect: R(ix, H - m - 1.5 * k, iw, 1 * k), size: 40 * k, align: "left", over: true },
       { role: "caption", rect: R(ix, H - m - .5 * k, iw, .45 * k), size: 13 * k, align: "left", over: true }] };
@@ -573,7 +611,8 @@ const FONT_CHOICES = [
 const FONT_W = { "Playfair Display": [700, 800], "Lora": [500, 700], "Cormorant Garamond": [500, 600], "Montserrat": [500, 700], "Nunito": [600, 800],
   "Inter": [500, 700], "Bebas Neue": [400, 400], "Lilita One": [400, 400], "Great Vibes": [400, 400], "Pinyon Script": [400, 400], "Dancing Script": [600, 600], "Caveat": [600, 600] };
 function textLook(pi, page, t){
-  const th = TH(), cs = (page.style && page.style[t.role]) || {}, base = th[t.role] || th.body, isCover = isCoverPage(pi);
+  const th = TH(), lk = t.look || {}, cs = { ...lk, ...((page.style && page.style[t.role]) || {}) }, base = th[t.role] || th.body, isCover = isCoverPage(pi);
+  if (cs.color === "bg") cs.color = pageBg(pi, page); // "cut out" text in the page colour
   const family = cs.font || base.family, w = FONT_W[family] || [400, 700];
   let weight = cs.font && cs.font !== base.family ? w[0] : base.weight;
   if (cs.bold === true) weight = w[1]; else if (cs.bold === false) weight = w[0];
@@ -581,10 +620,11 @@ function textLook(pi, page, t){
     family, weight, italic: cs.italic ?? (base.style === "italic"),
     size: cs.size || Math.round(t.size * (page.textScale || 1) * 2) / 2,
     color: cs.color || (t.over ? "#FFFFFF" : (() => { const P = pageInk(pi, page); return t.role === "title" && P.accent ? P.accent : P.ink; })()),
-    align: cs.align || t.align, upper: !!cs.upper, spacing: cs.spacing || 0, lh: cs.lh || 1.25, over: !!t.over,
+    align: cs.align || t.align, upper: !!cs.upper, spacing: cs.spacing || 0, lh: cs.lh || 1.25, over: !!t.over, rot: t.rot || 0,
     boldOn: weight >= w[1] && w[1] > w[0], box: cs.box || null
   };
 }
+const washCSS = (w, bg) => `linear-gradient(to bottom, ${hexA(bg, w.a)} 0%, ${hexA(bg, w.a)} ${w.to * 100}%, ${hexA(bg, 0)} ${Math.min(100, (w.to + .2) * 100)}%)`;
 const fontStr = (L, px) => `${L.italic ? "italic" : "normal"} ${L.weight} ${px}px "${L.family}"`;
 const hexA = (hex, a) => { const h = String(hex).replace("#", ""), n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16);
   return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
@@ -639,7 +679,7 @@ const layoutCount = page => geom(page.layout, D().size.w, D().size.h, TH()).slot
 function pageGeom(page){
   const d = D(), G = geom(page.layout, d.size.w, d.size.h, pageTheme(page));
   G.n = G.slots.length;
-  if (page.slotPos) G.slots = G.slots.map((r, i) => page.slotPos[i] ? { ...page.slotPos[i] } : r);
+  if (page.slotPos) G.slots = G.slots.map((r, i) => page.slotPos[i] ? { ...r, ...page.slotPos[i] } : r);
   (page.extraSlots || []).forEach(e => G.slots.push({ ...e.rect }));
   if (page.textPos) G.texts = G.texts.map(t => page.textPos[t.role] ? { ...t, rect: { ...page.textPos[t.role] } } : t);
   (page.extraTexts || []).forEach(e => { if (page.textPos && page.textPos[e.key]) G.texts.push({ role: e.key, rect: { ...page.textPos[e.key] }, size: e.size, align: e.align }); });
@@ -1041,12 +1081,12 @@ function renderPage(pi, ppi, mode){
   }
   const G = pageGeom(page);
   const rank = {}; paintOrder(page, G).forEach((it, i) => { rank[it.key] = 10 + i; });
-  if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H, page && page.bgColor));
+  if (isCover && th.deco && !(page && NO_DECO.has(page.layout))) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H, page && page.bgColor));
   G.slots.forEach((r, si) => {
     const slot = slotAt(page, si), s = document.createElement("div");
     s.className = "slot"; s.dataset.p = pi; s.dataset.s = si; s.style.zIndex = rank[slotKey(page, si)];
     let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
-    if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
+    if (th.frame && page.layout !== "full" && !fullCover(pi, page) && !r.bare) {
       inset = th.frame.width;
       s.style.background = frameColor(pi, page, si);
       if (th.frame.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
@@ -1060,6 +1100,7 @@ function renderPage(pi, ppi, mode){
       placeImg(img, ph, (fw - 2 * inset) * ppi, (fh - 2 * inset) * ppi, slot);
       photoThumbURL(slot.photo).then(u => { if (u) img.src = u; });
       inner.appendChild(img);
+      if (r.wash) inner.insertAdjacentHTML("beforeend", `<div style="position:absolute; inset:0; pointer-events:none; background:${washCSS(r.wash, pageBg(pi, page))}"></div>`);
       if (mode === "edit") s.classList.add("has");
       if (mode === "edit" && printPPI(ph, { w: fw - 2 * inset, h: fh - 2 * inset }, slot) < LOW_PPI) s.insertAdjacentHTML("beforeend", '<span class="warnb">Low resolution for print</span>');
     } else {
@@ -1077,7 +1118,11 @@ function renderPage(pi, ppi, mode){
     if (mode === "edit" && sel && sel.p === pi && sel.t === t.role) box.classList.add("tsel");
     Object.assign(box.style, { left: t.rect.x * ppi + "px", top: t.rect.y * ppi + "px", width: t.rect.w * ppi + "px", height: t.rect.h * ppi + "px" });
     styleTextBox(box, textLook(pi, page, t), ppi);
-    const tx = document.createElement("div"); tx.dataset.ph = TEXT_PH[t.role] || "Add text"; tx.textContent = page.texts[t.role] || "";
+    const tx = document.createElement("div"); tx.dataset.ph = t.ph || TEXT_PH[t.role] || "Add text"; tx.textContent = page.texts[t.role] || "";
+    if (t.rot) { // text running up the page: lay the line along the box's length
+      box.style.justifyContent = "center";
+      Object.assign(tx.style, { position: "absolute", left: "50%", top: "50%", width: t.rect.h * ppi + "px", transform: `translate(-50%, -50%) rotate(${t.rot}deg)` });
+    }
     if (mode === "edit") {
       try { tx.contentEditable = "plaintext-only"; } catch { tx.contentEditable = "true"; }
       if (tx.contentEditable !== "plaintext-only") tx.contentEditable = "true";
@@ -1595,7 +1640,8 @@ function renderPanels(){
       b.style.aspectRatio = `${W} / ${H}`;
       const G = geom(key, W, H, { ...THEMES.classic, margin: .7, gap: .3 });
       G.slots.forEach(r => b.insertAdjacentHTML("beforeend", `<i style="left:${r.x / W * 100}%; top:${r.y / H * 100}%; width:${r.w / W * 100}%; height:${r.h / H * 100}%"></i>`));
-      G.texts.forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
+      G.texts.filter(t => t.rot).forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + t.rect.w * .35) / W * 100}%; top:${(t.rect.y + t.rect.h * .2) / H * 100}%; width:${t.rect.w * .3 / W * 100}%; height:${t.rect.h * .6 / H * 100}%"></i>`));
+      G.texts.filter(t => !t.rot).forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
       b.addEventListener("click", () => { page.layout = key; delete page.slotPos; if (page.z) Object.keys(page.z).forEach(k => { if (/^s\d/.test(k)) delete page.z[k]; }); if (page.textPos) Object.keys(page.textPos).forEach(k => { if (!/^x/.test(k)) delete page.textPos[k]; }); sel = null; changed(); });
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
@@ -1615,7 +1661,7 @@ function renderPanels(){
       const id = "tf-" + t.role;
       w.innerHTML = `<label class="f" for="${id}">${{ title: "Title", caption: "Caption", body: "Text" }[t.role] || "Added text box"}</label>`;
       const inp = document.createElement(t.role === "body" ? "textarea" : "input"); inp.id = id; if (inp.tagName === "INPUT") inp.type = "text";
-      inp.value = page.texts[t.role] || ""; inp.placeholder = TEXT_PH[t.role] || "Add text";
+      inp.value = page.texts[t.role] || ""; inp.placeholder = t.ph || TEXT_PH[t.role] || "Add text";
       inp.addEventListener("input", () => { page.texts[t.role] = inp.value; queueSave(); renderStage(); });
       w.append(inp, styleControls(pi, page, t, t.role === G.texts[0].role));
       return w;
@@ -2020,7 +2066,7 @@ function issues(){
   d.pages.forEach((p, pi) => {
     const G = pageGeom(p);
     G.slots.forEach((r, si) => {
-      const s = slotAt(p, si) || {}, inset = th.frame && p.layout !== "full" && !fullCover(pi, p) ? th.frame.width : 0;
+      const s = slotAt(p, si) || {}, inset = th.frame && p.layout !== "full" && !fullCover(pi, p) && !r.bare ? th.frame.width : 0;
       if (!s.photo) out.push({ pi, kind: "empty" });
       else if (d.photos[s.photo] && printPPI(d.photos[s.photo], { w: r.w - 2 * inset, h: r.h - 2 * inset }, s) < LOW_PPI) out.push({ pi, kind: "low" });
     });
@@ -2098,7 +2144,7 @@ async function drawPage(pi, o){
   ctx.fillStyle = pageBg(pi, page); ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
   if (hasBg(page)) await drawBgPhoto(ctx, page.bg, pageBg(pi, page), W, H, b, X, dpi);
   const G = pageGeom(page);
-  if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi, page.bgColor);
+  if (isCover && th.deco && !NO_DECO.has(page.layout)) drawDeco(ctx, th.deco, W, H, X, dpi, page.bgColor);
   const drawSlot = async (si, r0) => {
     const slot = slotAt(page, si) || {};
     // frames that touch the trim edge run into the bleed
@@ -2108,7 +2154,7 @@ async function drawPage(pi, o){
     if (r0.x + r0.w >= W - e) r.w = W + b - r.x;
     if (r0.y + r0.h >= H - e) r.h = H + b - r.y;
     let inset = 0;
-    if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
+    if (th.frame && page.layout !== "full" && !fullCover(pi, page) && !r0.bare) {
       inset = th.frame.width;
       ctx.save();
       if (th.frame.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
@@ -2130,6 +2176,11 @@ async function drawPage(pi, o){
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
     bmp.close();
+    if (r0.wash) {
+      const bgc = pageBg(pi, page), g = ctx.createLinearGradient(0, X(r0.y), 0, X(r0.y + r0.h)), wa = r0.wash;
+      g.addColorStop(0, hexA(bgc, wa.a)); g.addColorStop(wa.to, hexA(bgc, wa.a)); g.addColorStop(Math.min(1, wa.to + .2), hexA(bgc, 0)); g.addColorStop(1, hexA(bgc, 0));
+      ctx.fillStyle = g; ctx.fillRect(X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
+    }
   };
   const drawText = async (t) => {
     let txt = (page.texts[t.role] || "").trim(); if (!txt) return;
@@ -2137,20 +2188,23 @@ async function drawPage(pi, o){
     if (L.upper) txt = txt.toUpperCase();
     await document.fonts.load(fontStr(L, 40)).catch(() => null);
     let insX = 0, insY = 0;
+    ctx.save();
+    // the box in its own frame: turned for text that runs up the page
+    let bx0 = X(t.rect.x), by0 = X(t.rect.y), bw0 = t.rect.w * dpi, bh0 = t.rect.h * dpi;
+    if (L.rot) { ctx.translate(bx0 + bw0 / 2, by0 + bh0 / 2); ctx.rotate(L.rot * Math.PI / 180); [bw0, bh0] = [bh0, bw0]; bx0 = -bw0 / 2; by0 = -bh0 / 2; }
     if (L.box) {
       const bx = L.box, pad = (bx.pad || 0) / 72 * dpi, bw = (bx.bw || 0) / 72 * dpi;
-      drawTextBox(ctx, bx, X(t.rect.x), X(t.rect.y), t.rect.w * dpi, t.rect.h * dpi, dpi, L.color);
+      drawTextBox(ctx, bx, bx0, by0, bw0, bh0, dpi, L.color);
       insX = pad + (bx.under ? 0 : bw); insY = pad + bw / (bx.under ? 2 : 1);
     }
-    ctx.save();
     ctx.font = fontStr(L, size);
     ctx.fillStyle = L.color;
     if ("letterSpacing" in ctx) ctx.letterSpacing = (L.spacing * size) + "px";
     if (L.over) { ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = .08 * dpi; ctx.shadowOffsetY = .02 * dpi; }
     ctx.textBaseline = "middle"; ctx.textAlign = L.align;
-    const lines = wrapLines(ctx, txt, t.rect.w * dpi - 2 * insX), lh = size * L.lh, total = lines.length * lh;
-    let y = X(t.rect.y) + (t.rect.h * dpi - total) / 2 + lh / 2;
-    const x = L.align === "center" ? X(t.rect.x + t.rect.w / 2) : L.align === "right" ? X(t.rect.x + t.rect.w) - insX : X(t.rect.x) + insX;
+    const lines = wrapLines(ctx, txt, bw0 - 2 * insX), lh = size * L.lh, total = lines.length * lh;
+    let y = by0 + (bh0 - total) / 2 + lh / 2;
+    const x = L.align === "center" ? bx0 + bw0 / 2 : L.align === "right" ? bx0 + bw0 - insX : bx0 + insX;
     lines.forEach(l => { ctx.fillText(l, x, y); y += lh; });
     ctx.restore();
   };
