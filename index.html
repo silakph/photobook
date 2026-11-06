@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='3' y='5' width='11' height='18' rx='2' fill='%231C1D21'/%3E%3Crect x='14' y='5' width='11' height='18' rx='2' fill='%232F5BD3'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;0,800;1,700&amp;family=Great+Vibes&amp;family=Pinyon+Script&amp;family=Lilita+One&amp;family=Cormorant+Garamond:ital,wght@0,600;1,500&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;0,800;1,700&amp;family=Great+Vibes&amp;family=Pinyon+Script&amp;family=Lilita+One&amp;family=Cormorant+Garamond:ital,wght@0,600;1,500&amp;family=Nunito:wght@600;700;800&amp;family=Lora:ital,wght@0,500;0,700;1,500;1,700&amp;family=Montserrat:ital,wght@0,500;0,700;1,500;1,700&amp;family=Dancing+Script:wght@600&amp;family=Bebas+Neue&amp;family=Caveat:wght@600&amp;display=swap" rel="stylesheet">
 <style>
 :root{--ink:#1C1D21; --soft:#6A6D75; --line:#E4E1DA; --bg:#F3F1EC; --card:#FFFFFF; --blue:#2F5BD3; --blue-bg:#EEF3FF; --warn:#7A5300; --warn-bg:#FFF4D6; --ok:#3B7A57; --bad:#B42318; color-scheme:only light}
 *{box-sizing:border-box}
@@ -103,6 +103,19 @@ h1,h2{margin:0}
 .themes button.on{border:2px solid var(--blue); background:var(--blue-bg)}
 .themes .sw{height:64px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px}
 .check{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
+.tstyle{margin:8px 0 4px; border:1px solid var(--line); border-radius:10px}
+.tstyle > summary{cursor:pointer; padding:9px 12px; font-size:13px; font-weight:600; list-style:none}
+.tstyle > summary::before{content:"▸ "; color:var(--soft)} .tstyle[open] > summary::before{content:"▾ "}
+.tstyle .body{padding:0 12px 12px}
+.tstyle .row{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:8px}
+.tstyle .tg{min-width:32px; height:34px; padding:0 7px; border-radius:7px; border:1px solid var(--line); background:#FFFFFF; font-weight:700}
+.tstyle .tg[aria-pressed="true"]{background:var(--ink); color:#FFFFFF; border-color:var(--ink)}
+.tstyle .sw{width:26px; height:26px; border-radius:50%; border:2px solid #FFFFFF; box-shadow:0 0 0 1px var(--line); padding:0}
+.tstyle .sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--blue)}
+.tstyle input[type=color]{width:34px; height:30px; padding:0; border:1px solid var(--line); border-radius:6px; background:#FFFFFF}
+.tstyle .lbl{font-size:12px; font-weight:600; color:var(--soft); min-width:84px}
+.tstyle input[type=range]{flex:1; min-width:90px}
+.tstyle .val{font-size:12px; color:var(--soft); min-width:40px; text-align:right}
 .bgctl{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
 .sec-lbl{margin:0 0 8px; font-size:11px; font-weight:600; color:var(--soft); letter-spacing:.5px}
 .pg.bgdrop{outline:3px dashed var(--blue); outline-offset:-3px}
@@ -260,8 +273,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       <div class="panel" id="p-text" hidden="">
         <p class="note" id="textNote"></p>
         <div id="textFields"></div>
-        <label class="f" for="textScale">Text size</label>
-        <input id="textScale" type="range" min="0.6" max="1.8" step="0.05" value="1" style="width:100%">
+
       </div>
       <div class="panel" id="p-theme" hidden="">
         <p class="note">The theme styles every page: background, photo borders and fonts. Your photos and text stay put.</p>
@@ -426,6 +438,43 @@ function geom(layout, W, H, th){
       { role: "body", rect: R(ix + iw * .12, iy + ih * .52, iw * .76, ih * .3), size: 13.5 * k, align: "center" }] };
   }
   return { slots: [], texts: [] };
+}
+const FONT_CHOICES = [
+  ["Playfair Display", "Classic serif"], ["Lora", "Book serif"], ["Cormorant Garamond", "Elegant serif"],
+  ["Montserrat", "Modern sans"], ["Nunito", "Rounded sans"], ["Inter", "Clean sans"],
+  ["Bebas Neue", "Tall caps"], ["Lilita One", "Bold & fun"],
+  ["Great Vibes", "Script"], ["Pinyon Script", "Formal script"], ["Dancing Script", "Casual script"], ["Caveat", "Handwriting"]
+];
+// regular and bold weights each font is loaded with
+const FONT_W = { "Playfair Display": [700, 800], "Lora": [500, 700], "Cormorant Garamond": [500, 600], "Montserrat": [500, 700], "Nunito": [600, 800],
+  "Inter": [500, 700], "Bebas Neue": [400, 400], "Lilita One": [400, 400], "Great Vibes": [400, 400], "Pinyon Script": [400, 400], "Dancing Script": [600, 600], "Caveat": [600, 600] };
+function textLook(pi, page, t){
+  const th = TH(), cs = (page.style && page.style[t.role]) || {}, base = th[t.role] || th.body, isCover = isCoverPage(pi);
+  const family = cs.font || base.family, w = FONT_W[family] || [400, 700];
+  let weight = cs.font && cs.font !== base.family ? w[0] : base.weight;
+  if (cs.bold === true) weight = w[1]; else if (cs.bold === false) weight = w[0];
+  return {
+    family, weight, italic: cs.italic ?? (base.style === "italic"),
+    size: cs.size || Math.round(t.size * (page.textScale || 1) * 2) / 2,
+    color: cs.color || (t.over ? "#FFFFFF" : isCover ? th.coverInk : (t.role === "title" && th.accent ? th.accent : th.ink)),
+    align: cs.align || t.align, upper: !!cs.upper, spacing: cs.spacing || 0, lh: cs.lh || 1.25, over: !!t.over,
+    boldOn: weight >= w[1] && w[1] > w[0]
+  };
+}
+const fontStr = (L, px) => `${L.italic ? "italic" : "normal"} ${L.weight} ${px}px "${L.family}"`;
+function styleTextBox(box, L, ppi){
+  Object.assign(box.style, {
+    justifyContent: L.align === "center" ? "center" : L.align === "right" ? "flex-end" : "flex-start", textAlign: L.align,
+    font: fontStr(L, L.size / 72 * ppi), color: L.color, textTransform: L.upper ? "uppercase" : "none",
+    letterSpacing: L.spacing + "em", lineHeight: String(L.lh),
+    textShadow: L.over ? `0 ${.02 * ppi}px ${.08 * ppi}px rgba(0,0,0,.55)` : "none"
+  });
+}
+// restyle the text on the open spread without redrawing the photos
+function refreshTexts(pi){
+  const el = document.querySelector(`#spread .pg[data-pi="${pi}"]`), page = D().pages[pi]; if (!el || !page) return;
+  const G = geom(page.layout, D().size.w, D().size.h, TH()), ppi = stagePPI();
+  G.texts.forEach(t => { const box = el.querySelector(`.tx[data-role="${t.role}"]`); if (box) styleTextBox(box, textLook(pi, page, t), ppi); });
 }
 const TEXT_PH = { title: "Add a title", caption: "Add a caption", body: "Add some words…" };
 
@@ -755,13 +804,9 @@ function renderPage(pi, ppi, mode){
     el.appendChild(s);
   });
   G.texts.forEach(t => {
-    const st = th[t.role] || th.body, size = t.size * (page.textScale || 1);
-    const box = document.createElement("div"); box.className = "tx";
-    Object.assign(box.style, { left: t.rect.x * ppi + "px", top: t.rect.y * ppi + "px", width: t.rect.w * ppi + "px", height: t.rect.h * ppi + "px",
-      justifyContent: t.align === "center" ? "center" : "flex-start", textAlign: t.align,
-      font: `${st.style} ${st.weight} ${size / 72 * ppi}px "${st.family}"`,
-      color: t.over ? "#FFFFFF" : isCover ? (t.role === "title" && th.deco === "baubles" ? th.coverInk : th.coverInk) : (t.role === "title" && th.accent ? th.accent : th.ink) });
-    if (t.over) box.style.textShadow = `0 ${.02 * ppi}px ${.08 * ppi}px rgba(0,0,0,.55)`;
+    const box = document.createElement("div"); box.className = "tx"; box.dataset.role = t.role;
+    Object.assign(box.style, { left: t.rect.x * ppi + "px", top: t.rect.y * ppi + "px", width: t.rect.w * ppi + "px", height: t.rect.h * ppi + "px" });
+    styleTextBox(box, textLook(pi, page, t), ppi);
     const tx = document.createElement("div"); tx.dataset.ph = TEXT_PH[t.role]; tx.textContent = page.texts[t.role] || "";
     if (mode === "edit") {
       try { tx.contentEditable = "plaintext-only"; } catch { tx.contentEditable = "true"; }
@@ -1079,9 +1124,10 @@ function renderPanels(){
       const inp = document.createElement(t.role === "body" ? "textarea" : "input"); inp.id = id; if (inp.tagName === "INPUT") inp.type = "text";
       inp.value = page.texts[t.role] || ""; inp.placeholder = TEXT_PH[t.role];
       inp.addEventListener("input", () => { page.texts[t.role] = inp.value; queueSave(); renderStage(); });
-      w.appendChild(inp); return w;
+      w.append(inp, styleControls(pi, page, t, t.role === G.texts[0].role));
+      return w;
     }));
-    $("textScale").value = page ? page.textScale || 1 : 1;
+
   }
   // theme
   if (!$("p-theme").hidden) {
@@ -1097,12 +1143,59 @@ function renderPanels(){
   }
   $("sizeLabel").textContent = `${sizeLabel(D().size)} · ${D().pages.length} pages`;
 }
+// Font, size, colour, bold/italic/caps, alignment and spacing for one text box
+function styleControls(pi, page, t, open){
+  const L = textLook(pi, page, t), th = TH(), role = t.role;
+  const st = () => { page.style = page.style || {}; return (page.style[role] = page.style[role] || {}); };
+  const apply = (redrawPanel) => { queueSave(); refreshTexts(pi); if (redrawPanel) renderPanels(); };
+  const d = document.createElement("details"); d.className = "tstyle"; if (open || openStyles.has(pi + role)) d.open = true;
+  d.addEventListener("toggle", () => { if (d.open) openStyles.add(pi + role); else openStyles.delete(pi + role); });
+  const swatches = [...new Set([L.color.toUpperCase(), th.ink, th.accent, th.coverInk, "#FFFFFF", "#1C1D21", "#6A6D75", "#B3172B", "#13774A", "#12306B", "#2F5BD3", "#C2185B"].map(c => c.toUpperCase()))];
+  const id = k => `ts-${role}-${k}`;
+  d.innerHTML = `<summary>Style</summary><div class="body">
+    <label class="f" for="${id("font")}" style="margin-top:4px">Font</label>
+    <select id="${id("font")}"><option value="">Theme font (${esc((th[role] || th.body).family)})</option>
+      ${FONT_CHOICES.map(([f, n]) => `<option value="${f}" ${(page.style && page.style[role] && page.style[role].font) === f ? "selected" : ""}>${f} · ${n}</option>`).join("")}</select>
+    <div class="row"><span class="lbl">Size</span><input id="${id("size")}" type="range" min="6" max="96" step="0.5" value="${L.size}" aria-label="Text size in points"><span class="val" id="${id("sizev")}">${L.size} pt</span></div>
+    <div class="row" role="group" aria-label="Text style">
+      <button type="button" class="tg" id="${id("b")}" aria-pressed="${L.boldOn}" aria-label="Bold"><b>B</b></button>
+      <button type="button" class="tg" id="${id("i")}" aria-pressed="${!!L.italic}" aria-label="Italic"><i style="font-family:Georgia,serif">I</i></button>
+      <button type="button" class="tg" id="${id("u")}" aria-pressed="${L.upper}" aria-label="All capitals">AA</button>
+      <span style="width:4px"></span>
+      ${["left", "center", "right"].map(a => `<button type="button" class="tg" data-align="${a}" aria-pressed="${L.align === a}" aria-label="Align ${a}">${ALIGN_ICON[a]}</button>`).join("")}
+    </div>
+    <div class="row"><span class="lbl">Colour</span>${swatches.map(c => `<button type="button" class="sw" data-color="${c}" style="background:${c}" aria-label="Colour ${c}" aria-pressed="${c === L.color.toUpperCase()}"></button>`).join("")}
+      <input type="color" id="${id("pick")}" value="${/^#[0-9a-f]{6}$/i.test(L.color) ? L.color : "#1C1D21"}" aria-label="Pick any colour"></div>
+    <div class="row"><span class="lbl">Letter spacing</span><input id="${id("ls")}" type="range" min="0" max="0.4" step="0.01" value="${L.spacing}" aria-label="Letter spacing"></div>
+    <div class="row"><span class="lbl">Line spacing</span><input id="${id("lh")}" type="range" min="0.9" max="2.2" step="0.05" value="${L.lh}" aria-label="Line spacing"></div>
+    <div class="row"><button type="button" class="btn small" id="${id("reset")}">Reset to theme style</button></div>
+  </div>`;
+  const q = sel => d.querySelector(sel);
+  q("#" + id("font")).onchange = e => { const s = st(); if (e.target.value) s.font = e.target.value; else delete s.font; delete s.bold; apply(true); renderSpreadList(); };
+  q("#" + id("size")).oninput = e => { st().size = +e.target.value; q("#" + id("sizev")).textContent = e.target.value + " pt"; apply(false); };
+  q("#" + id("b")).onclick = () => { st().bold = !textLook(pi, page, t).boldOn; apply(true); };
+  q("#" + id("i")).onclick = () => { st().italic = !textLook(pi, page, t).italic; apply(true); };
+  q("#" + id("u")).onclick = () => { st().upper = !textLook(pi, page, t).upper; apply(true); };
+  d.querySelectorAll("[data-align]").forEach(b => b.onclick = () => { st().align = b.dataset.align; apply(true); });
+  d.querySelectorAll("[data-color]").forEach(b => b.onclick = () => { st().color = b.dataset.color; apply(true); });
+  q("#" + id("pick")).oninput = e => { st().color = e.target.value.toUpperCase(); apply(false); };
+  q("#" + id("pick")).onchange = () => renderPanels();
+  q("#" + id("ls")).oninput = e => { st().spacing = +e.target.value; apply(false); };
+  q("#" + id("lh")).oninput = e => { st().lh = +e.target.value; apply(false); };
+  [id("size"), id("ls"), id("lh")].forEach(k => q("#" + k).onchange = () => renderSpreadList());
+  q("#" + id("reset")).onclick = () => { if (page.style) delete page.style[role]; apply(true); renderSpreadList(); };
+  return d;
+}
+const openStyles = new Set();
+const ALIGN_ICON = Object.fromEntries(["left", "center", "right"].map(a => {
+  const xs = a === "left" ? [[2, 14], [2, 10], [2, 14], [2, 9]] : a === "right" ? [[2, 14], [6, 14], [2, 14], [7, 14]] : [[2, 14], [4, 12], [2, 14], [4.5, 11.5]];
+  return [a, `<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">${xs.map(([x1, x2], i) => `<line x1="${x1}" x2="${x2}" y1="${3 + i * 3.4}" y2="${3 + i * 3.4}"/>`).join("")}</svg>`];
+}));
 function syncTextFields(){
   const pi = currentPageIdx(), page = D().pages[pi]; if (!page || $("p-text").hidden) return;
   ["title", "caption", "body"].forEach(r => { const f = $("tf-" + r); if (f && document.activeElement !== f) f.value = page.texts[r] || ""; });
 }
-$("textScale").addEventListener("input", e => { const page = D().pages[currentPageIdx()]; if (!page) return; page.textScale = +e.target.value; queueSave(); renderStage(); });
-$("textScale").addEventListener("change", () => renderSpreadList());
+
 $("sizeSel").addEventListener("change", e => {
   const k = e.target.value;
   if (k === "custom") { D().size = { key: "custom", w: D().size.w, h: D().size.h }; }
@@ -1284,16 +1377,19 @@ async function drawPage(pi, o){
     bmp.close();
   }
   for (const t of G.texts) {
-    const txt = (page.texts[t.role] || "").trim(); if (!txt) continue;
-    const st = th[t.role] || th.body, size = t.size * (page.textScale || 1) / 72 * dpi;
+    let txt = (page.texts[t.role] || "").trim(); if (!txt) continue;
+    const L = textLook(pi, page, t), size = L.size / 72 * dpi;
+    if (L.upper) txt = txt.toUpperCase();
+    await document.fonts.load(fontStr(L, 40)).catch(() => null);
     ctx.save();
-    ctx.font = `${st.style} ${st.weight} ${size}px "${st.family}"`;
-    ctx.fillStyle = t.over ? "#FFFFFF" : isCover ? th.coverInk : (t.role === "title" && th.accent ? th.accent : th.ink);
-    if (t.over) { ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = .08 * dpi; ctx.shadowOffsetY = .02 * dpi; }
-    ctx.textBaseline = "middle"; ctx.textAlign = t.align === "center" ? "center" : "left";
-    const lines = wrapLines(ctx, txt, t.rect.w * dpi), lh = size * 1.25, total = lines.length * lh;
+    ctx.font = fontStr(L, size);
+    ctx.fillStyle = L.color;
+    if ("letterSpacing" in ctx) ctx.letterSpacing = (L.spacing * size) + "px";
+    if (L.over) { ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = .08 * dpi; ctx.shadowOffsetY = .02 * dpi; }
+    ctx.textBaseline = "middle"; ctx.textAlign = L.align;
+    const lines = wrapLines(ctx, txt, t.rect.w * dpi), lh = size * L.lh, total = lines.length * lh;
     let y = X(t.rect.y) + (t.rect.h * dpi - total) / 2 + lh / 2;
-    const x = t.align === "center" ? X(t.rect.x + t.rect.w / 2) : X(t.rect.x);
+    const x = L.align === "center" ? X(t.rect.x + t.rect.w / 2) : L.align === "right" ? X(t.rect.x + t.rect.w) : X(t.rect.x);
     lines.forEach(l => { ctx.fillText(l, x, y); y += lh; });
     ctx.restore();
   }
