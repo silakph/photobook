@@ -103,6 +103,9 @@ h1,h2{margin:0}
 .themes button.on{border:2px solid var(--blue); background:var(--blue-bg)}
 .themes .sw{height:64px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px}
 .check{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
+.bgctl{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
+.sec-lbl{margin:0 0 8px; font-size:11px; font-weight:600; color:var(--soft); letter-spacing:.5px}
+.pg.bgdrop{outline:3px dashed var(--blue); outline-offset:-3px}
 .check p{margin:0 0 6px; display:flex; gap:8px; align-items:flex-start; font-size:13px}
 .check i{flex:none; width:8px; height:8px; margin-top:6px; border-radius:50%; background:var(--ok)}
 .check i.w{background:#C98A12}
@@ -244,6 +247,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       <div class="panel" id="p-layouts">
         <p class="note" id="layoutNote"></p>
         <div class="layouts" id="layoutGrid"></div>
+        <div class="bgctl" id="bgCtl"></div>
         <div class="check" id="check"></div>
       </div>
       <div class="panel" id="p-text" hidden="">
@@ -640,6 +644,14 @@ function renderPage(pi, ppi, mode){
   el.style.width = W * ppi + "px"; el.style.height = H * ppi + "px";
   el.style.background = isCover ? th.coverBg : th.bg;
   if (!page) { el.classList.add("blank"); return el; }
+  el.dataset.pi = pi;
+  if (hasBg(page)) el.appendChild(bgLayer(page, isCover ? th.coverBg : th.bg, W, H, ppi));
+  if (mode === "edit") {
+    // drop a photo on an empty part of the page to make it the background
+    el.addEventListener("dragover", e => { if (e.target.closest(".slot")) return; if ([...e.dataTransfer.types].includes("text/x-photo")) { e.preventDefault(); el.classList.add("bgdrop"); } });
+    el.addEventListener("dragleave", e => { if (!el.contains(e.relatedTarget)) el.classList.remove("bgdrop"); });
+    el.addEventListener("drop", e => { el.classList.remove("bgdrop"); if (e.target.closest(".slot")) return; e.preventDefault(); const id = e.dataTransfer.getData("text/x-photo"); if (id && D().photos[id]) setBg(pi, id); });
+  }
   const G = geom(page.layout, W, H, th);
   ensureSlots(page, G.slots.length);
   if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H));
@@ -691,6 +703,62 @@ function renderPage(pi, ppi, mode){
     box.appendChild(tx); el.appendChild(box);
   });
   return el;
+}
+// ---- page background photo (blur + soften) ----
+const BG_MAX_BLUR = .4; // inches of blur at the slider's maximum
+const hasBg = page => !!(page && page.bg && page.bg.photo && D().photos[page.bg.photo]);
+function bgLayer(page, base, W, H, ppi){
+  const bg = page.bg, ph = D().photos[bg.photo], blurIn = (bg.blur || 0) * BG_MAX_BLUR, m = blurIn * 2;
+  const box = document.createElement("div"); box.className = "bgph";
+  box.style.cssText = "position:absolute; inset:0; overflow:hidden; pointer-events:none";
+  // the photo is drawn a little larger than the page so the blur doesn't fade at the edges
+  const c = crop(ph, (W + 2 * m) * ppi, (H + 2 * m) * ppi, bg);
+  const img = document.createElement("img"); img.alt = "";
+  img.style.cssText = `position:absolute; max-width:none; width:${ph.w * c.s}px; height:${ph.h * c.s}px; left:${-c.sx * c.s - m * ppi}px; top:${-c.sy * c.s - m * ppi}px; filter:${blurIn ? `blur(${blurIn * ppi}px)` : "none"}`;
+  photoThumbURL(bg.photo).then(u => { if (u) img.src = u; });
+  box.appendChild(img);
+  if (bg.fade) box.insertAdjacentHTML("beforeend", `<div style="position:absolute; inset:0; background:${base}; opacity:${bg.fade}"></div>`);
+  return box;
+}
+function setBg(pi, id){
+  const pg = D().pages[pi], old = pg.bg || {};
+  pg.bg = { photo: id, cx: .5, cy: .5, zoom: 1, blur: old.blur ?? .35, fade: old.fade ?? .2 };
+  pickBg = null; sel = { p: pi, s: -1 }; say("upMsg", "");
+  showTab("layouts"); changed();
+}
+function refreshBg(pi){
+  const pg = D().pages[pi], el = document.querySelector(`#spread .pg[data-pi="${pi}"]`); if (!el || !hasBg(pg)) return;
+  const th = TH(), fresh = bgLayer(pg, pi === 0 ? th.coverBg : th.bg, D().size.w, D().size.h, stagePPI());
+  const old = el.querySelector(".bgph"); if (old) old.replaceWith(fresh); else el.prepend(fresh);
+}
+let pickBg = null;
+function renderBgCtl(pi){
+  const page = D().pages[pi], box = $("bgCtl");
+  if (!page) { box.innerHTML = ""; return; }
+  const where = pi === 0 ? "the cover" : `page ${pi}`;
+  if (!hasBg(page)) {
+    box.innerHTML = `<p class="sec-lbl">BACKGROUND PHOTO</p>
+      <p class="note">Fill ${where} with a photo behind the layout, then blur it so your frames and text stand out.</p>
+      <button class="btn small dark" type="button" id="bgChoose">Choose a background photo</button>
+      <p class="note" style="margin-top:8px">Or drag a photo onto an empty part of the page.</p>`;
+    $("bgChoose").onclick = () => {
+      if (!Object.keys(D().photos).length) { showTab("photos"); say("upMsg", "Add some photos first, then choose one for the background."); return; }
+      pickBg = pi; showTab("photos"); say("upMsg", `Tap a photo to use it as the background of ${where}.`);
+    };
+    return;
+  }
+  const bg = page.bg;
+  box.innerHTML = `<p class="sec-lbl">BACKGROUND PHOTO</p>
+    <div style="display:flex; gap:10px; align-items:center"><img id="bgThumb" alt="" style="width:56px; height:56px; object-fit:cover; border-radius:6px; background:var(--bg)"><span style="font-size:12.5px; color:var(--soft)">Behind everything on ${where}.</span></div>
+    <label class="f" for="bgBlur">Blur</label><input id="bgBlur" type="range" min="0" max="1" step="0.01" value="${bg.blur || 0}" style="width:100%">
+    <label class="f" for="bgFade">Soften <span style="font-weight:500; color:var(--soft)">(fade into the page colour)</span></label><input id="bgFade" type="range" min="0" max="0.85" step="0.01" value="${bg.fade || 0}" style="width:100%">
+    <div style="display:flex; gap:8px; margin-top:12px"><button class="btn small" type="button" id="bgChange">Change photo</button><button class="btn small" type="button" id="bgRemove">Remove</button></div>`;
+  photoThumbURL(bg.photo).then(u => { if (u && $("bgThumb")) $("bgThumb").src = u; });
+  $("bgBlur").oninput = e => { bg.blur = +e.target.value; refreshBg(pi); queueSave(); };
+  $("bgFade").oninput = e => { bg.fade = +e.target.value; refreshBg(pi); queueSave(); };
+  $("bgBlur").onchange = $("bgFade").onchange = () => renderSpreadList();
+  $("bgChange").onclick = () => { pickBg = pi; showTab("photos"); say("upMsg", `Tap a photo to use it as the background of ${where}.`); };
+  $("bgRemove").onclick = () => { delete page.bg; changed(); };
 }
 function placeImg(img, ph, w, h, slot){
   const c = crop(ph, w, h, slot);
@@ -877,6 +945,7 @@ function renderPanels(){
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
+    renderBgCtl(pi);
     renderCheck();
   }
   // photos
@@ -930,7 +999,7 @@ $("sizeSel").addEventListener("change", e => {
 // photos panel
 function photoUses(){
   const n = {};
-  D().pages.forEach(p => { const k = geom(p.layout, D().size.w, D().size.h, TH()).slots.length; p.slots.slice(0, k).forEach(s => { if (s.photo) n[s.photo] = (n[s.photo] || 0) + 1; }); });
+  D().pages.forEach(p => { const k = geom(p.layout, D().size.w, D().size.h, TH()).slots.length; p.slots.slice(0, k).forEach(s => { if (s.photo) n[s.photo] = (n[s.photo] || 0) + 1; }); if (hasBg(p)) n[p.bg.photo] = (n[p.bg.photo] || 0) + 1; });
   return n;
 }
 function renderPhotos(){
@@ -945,7 +1014,8 @@ function renderPhotos(){
     if (Math.min(ph.w, ph.h) < 1200) b.insertAdjacentHTML("beforeend", '<span class="lowres" title="Small photo: fine for small frames only"></span>');
     b.addEventListener("dragstart", e => { e.dataTransfer.setData("text/x-photo", id); e.dataTransfer.effectAllowed = "copy"; });
     b.addEventListener("click", () => {
-      if (!sel || sel.s < 0) { say("upMsg", "Select a frame on the page first, then tap a photo."); return; }
+      if (pickBg !== null && D().pages[pickBg]) { setBg(pickBg, id); return; }
+      if (!sel || sel.s < 0) { say("upMsg", "Select a frame on the page first, then tap a photo. For a page background, use Layouts → Background photo."); return; }
       putPhoto(sel.p, sel.s, id);
     });
     return b;
@@ -1060,6 +1130,7 @@ async function drawPage(pi, o){
   ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, cw, ch);
   const X = v => (v + sl + b) * dpi; // inches on the trimmed page -> canvas pixels
   ctx.fillStyle = isCover ? th.coverBg : th.bg; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
+  if (hasBg(page)) await drawBgPhoto(ctx, page.bg, isCover ? th.coverBg : th.bg, W, H, b, X, dpi);
   const G = geom(page.layout, W, H, th); ensureSlots(page, G.slots.length);
   if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
   for (const [si, r0] of G.slots.entries()) {
@@ -1110,6 +1181,36 @@ async function drawPage(pi, o){
   }
   if (o.marks) drawCropMarks(ctx, W, H, X, b, sl, dpi);
   return cv;
+}
+// the background photo at print size: covers the page and its bleed, blurred and softened like the editor
+let FILTER_OK = null;
+function canFilter(){
+  if (FILTER_OK === null) { const t = document.createElement("canvas").getContext("2d"); t.filter = "blur(2px)"; FILTER_OK = t.filter === "blur(2px)"; }
+  return FILTER_OK;
+}
+async function drawBgPhoto(ctx, bg, base, W, H, b, X, dpi){
+  const ph = D().photos[bg.photo], blurIn = (bg.blur || 0) * BG_MAX_BLUR, m = blurIn * 2;
+  // cover the page, its bleed and the blur margin (always inside the photo, so the edges never show a gap)
+  const c = crop(ph, W + 2 * b + 2 * m, H + 2 * b + 2 * m, bg), sx = c.sx, sy = c.sy, sw = c.sw, sh = c.sh;
+  const bmp = await loadOriginal(bg.photo), kx = bmp.width / ph.w, ky = bmp.height / ph.h;
+  const dx = X(-b - m), dy = X(-b - m), dw = (W + 2 * b + 2 * m) * dpi, dh = (H + 2 * b + 2 * m) * dpi;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi); ctx.clip();
+  ctx.imageSmoothingQuality = "high";
+  if (blurIn && canFilter()) {
+    ctx.filter = `blur(${blurIn * dpi}px)`;
+    ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, dx, dy, dw, dh);
+    ctx.filter = "none";
+  } else if (blurIn) {
+    // browsers without canvas blur: shrink, then enlarge smoothly
+    const f = Math.max(.005, Math.min(1, 2.5 / (blurIn * dpi)));
+    const tmp = document.createElement("canvas"); tmp.width = Math.max(2, Math.round(dw * f)); tmp.height = Math.max(2, Math.round(dh * f));
+    const t = tmp.getContext("2d"); t.imageSmoothingQuality = "high"; t.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, 0, 0, tmp.width, tmp.height);
+    ctx.drawImage(tmp, dx, dy, dw, dh);
+  } else ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, dx, dy, dw, dh);
+  bmp.close();
+  if (bg.fade) { ctx.globalAlpha = bg.fade; ctx.fillStyle = base; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi); }
+  ctx.restore();
 }
 function wrapLines(ctx, text, maxW){
   const out = [];
