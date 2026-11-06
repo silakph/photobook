@@ -478,10 +478,10 @@ const LAYOUTS = LAYOUT_GROUPS.flatMap(g => g[1]);
 const COVER_LAYOUTS = [
   ["cover", "Photo + title"], ["coverFull", "Full photo"], ["coverTitleTop", "Title on top"],
   ["coverFramed", "Framed photo"], ["coverCollage", "Collage"], ["coverTitleOnly", "Title only"],
-  ["coverCutout", "Big word"], ["coverSplit", "Side panel"], ["coverVeil", "Soft photo"],
+  ["coverCutout", "Big word"], ["coverSplit", "Side panel"], ["coverVeil", "Soft photo"], ["coverVeilLow", "Soft photo (bottom)"],
   ["coverPhotoTop", "Photo + script"], ["coverWindow", "Square window"], ["coverBand", "Side title"]
 ];
-const NO_DECO = new Set(["coverVeil", "coverPhotoTop", "coverBand"]);
+const NO_DECO = new Set(["coverVeil", "coverVeilLow", "coverPhotoTop", "coverBand"]);
 const LAYOUT_NAME = Object.fromEntries([...LAYOUTS, ...COVER_LAYOUTS]);
 
 // Where the frames and text boxes go on a page, in inches from the page's top-left (trim) corner
@@ -517,6 +517,10 @@ function geom(layout, W, H, th){
       return { slots: [R(0, 0, W, H, { bare: true, wash: { a: .6, to: .5 } })], texts: [
         { role: "caption", rect: R(ix, m * .7, iw, H * .07), size: 11 * k, align: "center", ph: "Our wedding", look: { font: "Cormorant Garamond", upper: true, spacing: .25, italic: false } },
         { role: "title", rect: R(ix, H * .3, iw, H * .26), size: 56 * k, align: "center", ph: "Names", look: { font: "Great Vibes", italic: false } }] };
+    case "coverVeilLow": // the same, softened at the bottom instead: clear sky up top, title below
+      return { slots: [R(0, 0, W, H, { bare: true, wash: { a: .6, to: .5, up: true } })], texts: [
+        { role: "title", rect: R(ix, H * .44, iw, H * .26), size: 56 * k, align: "center", ph: "Names", look: { font: "Great Vibes", italic: false } },
+        { role: "caption", rect: R(ix, H - m * .7 - H * .07, iw, H * .07), size: 11 * k, align: "center", ph: "Our wedding", look: { font: "Cormorant Garamond", upper: true, spacing: .25, italic: false } }] };
     case "coverPhotoTop": // photo across the top, a big script line overlapping its edge
       return { slots: [R(0, 0, W, H * .62, { bare: true })], texts: [
         { role: "title", rect: R(ix, H * .5, iw, H * .22), size: 62 * k, align: "center", look: { font: "Great Vibes", lh: 1, italic: false } },
@@ -624,7 +628,7 @@ function textLook(pi, page, t){
     boldOn: weight >= w[1] && w[1] > w[0], box: cs.box || null
   };
 }
-const washCSS = (w, bg) => `linear-gradient(to bottom, ${hexA(bg, w.a)} 0%, ${hexA(bg, w.a)} ${w.to * 100}%, ${hexA(bg, 0)} ${Math.min(100, (w.to + .2) * 100)}%)`;
+const washCSS = (w, bg) => `linear-gradient(to ${w.up ? "top" : "bottom"}, ${hexA(bg, w.a)} 0%, ${hexA(bg, w.a)} ${w.to * 100}%, ${hexA(bg, 0)} ${Math.min(100, (w.to + .2) * 100)}%)`;
 const fontStr = (L, px) => `${L.italic ? "italic" : "normal"} ${L.weight} ${px}px "${L.family}"`;
 const hexA = (hex, a) => { const h = String(hex).replace("#", ""), n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16);
   return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
@@ -2177,7 +2181,7 @@ async function drawPage(pi, o){
     ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
     bmp.close();
     if (r0.wash) {
-      const bgc = pageBg(pi, page), g = ctx.createLinearGradient(0, X(r0.y), 0, X(r0.y + r0.h)), wa = r0.wash;
+      const bgc = pageBg(pi, page), g = r0.wash.up ? ctx.createLinearGradient(0, X(r0.y + r0.h), 0, X(r0.y)) : ctx.createLinearGradient(0, X(r0.y), 0, X(r0.y + r0.h)), wa = r0.wash;
       g.addColorStop(0, hexA(bgc, wa.a)); g.addColorStop(wa.to, hexA(bgc, wa.a)); g.addColorStop(Math.min(1, wa.to + .2), hexA(bgc, 0)); g.addColorStop(1, hexA(bgc, 0));
       ctx.fillStyle = g; ctx.fillRect(X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
     }
