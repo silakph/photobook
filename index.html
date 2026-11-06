@@ -44,7 +44,18 @@ h1,h2{margin:0}
 .book b{font-size:15px}
 .book .meta{font-size:12.5px; color:var(--soft)}
 .book .acts{display:flex; gap:6px}
-.empty-lib{padding:40px; text-align:center; color:var(--soft); background:#FFFFFF; border-radius:12px}
+.empty-lib{padding:40px; text-align:center; color:var(--soft); background:#FFFFFF; border-radius:12px; grid-column:1/-1}
+.sec-head{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+.sec-head h2{font-size:20px}
+.sec-sub{margin:4px 0 0; color:var(--soft); font-size:13.5px}
+.tpl-sec{margin-top:44px; padding-top:28px; border-top:1px solid var(--line)}
+.mini{position:relative; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,.12); flex:none}
+.mini .ph{position:absolute; background:#C9D0DC}
+.mini .ph.f{box-sizing:border-box}
+.mini .t{position:absolute; display:flex; align-items:center; overflow:hidden; white-space:nowrap; line-height:1.1}
+.tpl .plan{display:flex; gap:3px; flex-wrap:wrap}
+.tpl .plan i{width:16px; height:16px; border-radius:2px; background:#ECE9E2; position:relative; overflow:hidden}
+.tpl .plan i b{position:absolute; background:#B9B4A9}
 
 /* editor shell */
 .editor{height:100%; display:flex; flex-direction:column}
@@ -173,12 +184,18 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
   <div class="lib">
     <div class="lib-head">
       <div class="brand"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 28 28"><rect x="3" y="5" width="11" height="18" rx="2" fill="#1C1D21"></rect><rect x="14" y="5" width="11" height="18" rx="2" fill="#2F5BD3"></rect></svg></div>
-      <h1>Your photobooks</h1>
-      <button class="btn dark" type="button" id="newBookBtn">+ New book</button>
+      <h1>Photobook</h1>
       <button class="btn" type="button" id="signOut">Sign out</button>
     </div>
-    <div class="books" id="books"></div>
-    <p class="msg" id="libMsg" role="status"></p>
+    <section aria-labelledby="myTitle">
+      <div class="sec-head"><h2 id="myTitle">My books</h2><button class="btn dark" type="button" id="newBookBtn">+ Blank book</button></div>
+      <div class="books" id="books"></div>
+      <p class="msg" id="libMsg" role="status"></p>
+    </section>
+    <section aria-labelledby="tplTitle" class="tpl-sec">
+      <div class="sec-head"><div><h2 id="tplTitle">Templates &amp; themes</h2><p class="sec-sub">A theme plus a ready-made page plan. Pick one, add your photos, and change anything you like.</p></div></div>
+      <div class="books" id="templates"></div>
+    </section>
   </div>
 </div>
 
@@ -376,10 +393,41 @@ function geom(layout, W, H, th){
 }
 const TEXT_PH = { title: "Add a title", caption: "Add a caption", body: "Add some words…" };
 
+// Starting points: a theme, a size and a page plan (after the cover). Inside pages stay an even number.
+const TEMPLATES = [
+  { key: "christmas", name: "Christmas party", theme: "christmas", size: "8x8", title: "Christmas 2026",
+    desc: "The night in big photos, the food, the gift exchange and a thank-you page.",
+    pages: ["one", "four", "full", "photoText", "three", "six", "two", "one", "four", "text"] },
+  { key: "birthday", name: "Birthday", theme: "birthday", size: "8x8", title: "Birthday Build",
+    desc: "The party from build-up to cake, with frames in bright brick colours.",
+    pages: ["photoText", "four", "one", "three", "six", "two", "full", "four", "one", "text"] },
+  { key: "year", name: "Family year", theme: "classic", size: "11x8.5", title: "Our Year",
+    desc: "A month-by-month keepsake: a page or two for each part of the year.",
+    pages: ["text", "one", "four", "two", "three", "six", "photoText", "four", "two", "one", "three", "six"] },
+  { key: "travel", name: "Travel", theme: "fullbleed", size: "10x10", title: "Summer by the sea",
+    desc: "Edge-to-edge scenery with smaller pages for the little moments.",
+    pages: ["full", "two", "full", "four", "photoText", "full", "three", "six", "full", "text"] }
+];
+// a small cover drawn from the same layout and decorations as the real cover
+function miniCover(themeKey, size, title, px){
+  const th = THEMES[themeKey] || THEMES.classic, W = size.w, H = size.h, ppi = px / Math.max(W, H);
+  const G = geom("cover", W, H, th);
+  let html = `<div class="mini" style="width:${W * ppi}px; height:${H * ppi}px; background:${th.coverBg}">`;
+  if (th.deco) html += decoSVG(th.deco, W, H);
+  G.slots.forEach(r => {
+    const fr = th.frame && !th.overCover ? `border:${th.frame.width * ppi}px solid ${th.frame.colors ? th.frame.colors[0] : th.frame.color};` : "";
+    html += `<span class="ph f" style="left:${r.x * ppi}px; top:${r.y * ppi}px; width:${r.w * ppi}px; height:${r.h * ppi}px; ${fr} background:${th.overCover ? "#8F9BAE" : "#C9D0DC"}"></span>`;
+  });
+  const t = G.texts.find(x => x.role === "title");
+  if (t) html += `<span class="t" style="left:${t.rect.x * ppi}px; top:${t.rect.y * ppi}px; width:${t.rect.w * ppi}px; height:${t.rect.h * ppi}px; justify-content:${t.align === "center" ? "center" : "flex-start"};
+    font:${th.title.style} ${th.title.weight} ${Math.min(t.size / 72 * ppi, t.rect.w * ppi / Math.max(6, title.length) * 1.7)}px '${th.title.family}'; color:${t.over ? "#FFFFFF" : th.coverInk}">${esc(title)}</span>`;
+  return html + "</div>";
+}
 function newPage(layout){ return { id: uid(), layout, slots: [], texts: { title: "", caption: "", body: "" }, textScale: 1 }; }
-function newBookData(sizeKey, theme, custom){
+function newBookData(sizeKey, theme, custom, plan){
   const sz = sizeKey === "custom" ? { key: "custom", w: custom.w, h: custom.h } : { key: sizeKey, w: SIZES[sizeKey].w, h: SIZES[sizeKey].h };
-  return { ver: 1, size: sz, theme, photos: {}, pages: [newPage("cover"), newPage("one"), newPage("four"), newPage("two"), newPage("photoText")] };
+  const inside = (plan && plan.length ? plan : ["one", "four", "two", "photoText"]).map(newPage);
+  return { ver: 1, size: sz, theme, photos: {}, pages: [newPage("cover"), ...inside] };
 }
 // make sure a page has at least as many slot records as its layout has frames (extra ones are kept for switching back)
 function ensureSlots(page, n){ while (page.slots.length < n) page.slots.push({ photo: null, cx: .5, cy: .5, zoom: 1 }); }
@@ -443,18 +491,18 @@ $("signOut").addEventListener("click", async () => { await sb.auth.signOut(); se
 
 async function openLibrary(){
   show("library"); history.replaceState(null, "", location.pathname);
+  renderTemplates();
   say("libMsg", "Loading…");
   const { data, error } = await sb.from("books").select("id,title,updated_at,data").order("updated_at", { ascending: false });
   if (error) return say("libMsg", /books/.test(error.message || "") ? "Run photobook.sql in Supabase first, then reload." : "Couldn’t load your books. " + errText(error), true);
   say("libMsg", "");
   const box = $("books");
-  if (!data.length) { box.innerHTML = '<div class="empty-lib">No photobooks yet. Tap <b>+ New book</b> to start one.</div>'; return; }
+  if (!data.length) { box.innerHTML = '<div class="empty-lib">No photobooks yet. Start from a template below, or tap <b>+ Blank book</b>.</div>'; return; }
   box.replaceChildren(...data.map(b => {
     const el = document.createElement("article"); el.className = "book";
     const d = b.data || {}, th = THEMES[d.theme] || THEMES.classic, sz = d.size || { key: "8x8", w: 8, h: 8 };
     const cov = document.createElement("button"); cov.type = "button"; cov.className = "cover-thumb"; cov.setAttribute("aria-label", `Open ${b.title}`);
-    cov.style.background = th.coverBg;
-    cov.innerHTML = `<span style="font:${th.sample.font}; color:${th.coverInk}; padding:8px; text-align:center">${esc(b.title)}</span>`;
+    cov.innerHTML = miniCover(d.theme, sz, b.title, 150);
     cov.addEventListener("click", () => openBook(b.id));
     const info = document.createElement("div");
     info.innerHTML = `<b>${esc(b.title)}</b><div class="meta">${esc(sizeLabel(sz))} · ${(d.pages || []).length} pages · ${th.name}<br>Edited ${new Date(b.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>`;
@@ -494,7 +542,36 @@ async function deleteBook(id){
     `<label class="opt"><input type="radio" name="nbt" value="${k}" ${i ? "" : "checked"}><span style="width:100%; height:40px; border-radius:6px; display:flex; align-items:center; justify-content:center; background:${t.sample.bg}; color:${t.sample.fg}; font:${t.sample.font}">${t.sample.text}</span>${t.name}</label>`).join("");
   $("nbSizes").addEventListener("change", () => { $("nbCustom").hidden = document.querySelector('input[name=nbs]:checked').value !== "custom"; });
 })();
-$("newBookBtn").addEventListener("click", () => { $("nbTitle").value = ""; say("nbMsg", ""); $("newDlg").showModal(); $("nbTitle").focus(); });
+let NB_PLAN = null;
+function openNewDialog(tpl){
+  NB_PLAN = tpl ? tpl.pages : null;
+  $("nbTitle").value = tpl ? tpl.title : ""; say("nbMsg", "");
+  document.querySelector(`input[name=nbs][value="${tpl ? tpl.size : "8x8"}"]`).checked = true;
+  document.querySelector(`input[name=nbt][value="${tpl ? tpl.theme : "classic"}"]`).checked = true;
+  $("nbCustom").hidden = true;
+  $("newTitle").textContent = tpl ? `New book: ${tpl.name}` : "New blank book";
+  $("newDlg").showModal(); $("nbTitle").focus(); $("nbTitle").select();
+}
+$("newBookBtn").addEventListener("click", () => openNewDialog(null));
+function renderTemplates(){
+  const LAY = (key, pw) => { const G = geom(key, 8, 8, { ...THEMES.classic, margin: .7, gap: .4 }); return G.slots.map(r => `<b style="left:${r.x / 8 * pw}px; top:${r.y / 8 * pw}px; width:${r.w / 8 * pw}px; height:${r.h / 8 * pw}px"></b>`).join(""); };
+  $("templates").replaceChildren(...TEMPLATES.map(t => {
+    const el = document.createElement("article"); el.className = "book tpl";
+    const sz = { key: t.size, w: SIZES[t.size].w, h: SIZES[t.size].h };
+    const cov = document.createElement("button"); cov.type = "button"; cov.className = "cover-thumb"; cov.setAttribute("aria-label", `Use the ${t.name} template`);
+    cov.innerHTML = miniCover(t.theme, sz, t.title, 150);
+    cov.addEventListener("click", () => openNewDialog(t));
+    const info = document.createElement("div");
+    info.innerHTML = `<b>${esc(t.name)}</b><div class="meta">${esc(THEMES[t.theme].name)} theme · ${esc(SIZES[t.size].label)} · ${t.pages.length} pages + cover</div>
+      <p style="margin:6px 0 0; font-size:13px">${esc(t.desc)}</p>
+      <div class="plan" aria-hidden="true" style="margin-top:8px">${t.pages.map(k => `<i>${LAY(k, 16)}</i>`).join("")}</div>`;
+    const acts = document.createElement("div"); acts.className = "acts";
+    const use = document.createElement("button"); use.className = "btn small dark"; use.type = "button"; use.textContent = "Use template"; use.addEventListener("click", () => openNewDialog(t));
+    acts.append(use);
+    el.append(cov, info, acts);
+    return el;
+  }));
+}
 $("nbCancel").addEventListener("click", () => $("newDlg").close());
 $("nbCreate").addEventListener("click", async () => {
   const title = $("nbTitle").value.trim() || "Untitled book";
@@ -506,7 +583,7 @@ $("nbCreate").addEventListener("click", async () => {
     custom = { w, h };
   }
   $("nbCreate").disabled = true;
-  const { data, error } = await sb.from("books").insert({ title, data: newBookData(sizeKey, theme, custom) }).select("id").single();
+  const { data, error } = await sb.from("books").insert({ title, data: newBookData(sizeKey, theme, custom, NB_PLAN) }).select("id").single();
   $("nbCreate").disabled = false;
   if (error) return say("nbMsg", "Couldn’t create the book. " + errText(error), true);
   $("newDlg").close(); openBook(data.id);
