@@ -58,8 +58,14 @@ h1,h2{margin:0}
 .tpl .plan i b{position:absolute; background:#B9B4A9}
 
 /* editor shell */
-.editor{height:100%; display:flex; flex-direction:column}
+.editor{height:100%; display:flex; flex-direction:column; overflow:hidden}
 .topbar{height:64px; flex:none; display:flex; align-items:center; gap:14px; padding:0 16px; background:#FFFFFF; border-bottom:1px solid var(--line)}
+.tsel{display:flex; flex-direction:column; position:relative}
+.tsel select{height:34px; width:auto; min-width:120px; padding:0 8px 0 30px; border-radius:8px; font-size:13px; font-weight:600}
+.tsel select#sizeSel{padding-left:8px}
+.tsel .tsw{position:absolute; left:8px; bottom:9px; width:16px; height:16px; border-radius:4px; box-shadow:0 0 0 1px rgba(0,0,0,.15); pointer-events:none}
+.cust{display:flex; align-items:center; gap:4px; font-size:13px; align-self:flex-end; margin-bottom:6px}
+.cust input{width:58px; height:32px; padding:0 6px}
 .topbar .title-in{border:0; height:auto; padding:0; font-weight:600; font-size:15px; width:220px; background:transparent}
 .topbar .lab{font-size:11px; color:var(--soft); font-weight:600; display:block}
 .saved{margin-left:auto; font-size:13px; font-weight:600; color:var(--ok)}
@@ -81,7 +87,7 @@ h1,h2{margin:0}
 .stage-nav{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center}
 .round{width:36px; height:36px; border-radius:50%; border:1px solid var(--line); background:#FFFFFF; font-size:18px; line-height:1}
 .tools{width:330px; flex:none; background:#FFFFFF; border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
-.tabs{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-bottom:1px solid var(--line); flex:none}
+.tabs{display:grid; grid-template-columns:repeat(5,auto); border-bottom:1px solid var(--line); flex:none}
 .els{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px}
 .els button{border:1px solid var(--line); border-radius:8px; background:#FFFFFF; padding:8px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:var(--ink)}
 .els button:hover{border-color:var(--blue)}
@@ -89,7 +95,7 @@ h1,h2{margin:0}
 .els .ic i{position:absolute; background:#D9DDE6; border-radius:2px}
 .el-row{display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--line); font-size:13px}
 .el-row span{flex:1}
-.tabs button{height:46px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--soft); font-weight:500}
+.tabs button{font-size:12.5px; padding:0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; height:46px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--soft); font-weight:500}
 .tabs button[aria-selected="true"]{color:var(--ink); font-weight:700; border-bottom-color:var(--ink)}
 .panel{padding:16px; overflow-y:auto; flex:1}
 .panel p.note{margin:0 0 10px; font-size:12.5px; color:var(--soft)}
@@ -242,7 +248,10 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
   <header class="topbar">
     <button class="btn small" type="button" id="backBtn" aria-label="Back to your photobooks">‹ Books</button>
     <label><span class="lab">BOOK</span><input class="title-in" id="bookTitle" type="text" maxlength="120" aria-label="Book title"></label>
-    <span class="lab" id="sizeLabel" style="font-size:13px; color:var(--ink); font-weight:500"></span>
+    <label class="tsel"><span class="lab">THEME</span><span class="tsw" id="themeSw" aria-hidden="true"></span><select id="themeSel" aria-label="Theme"></select></label>
+    <label class="tsel"><span class="lab">PAGE SIZE</span><select id="sizeSel" aria-label="Page size"></select></label>
+    <span class="cust" id="customSize" hidden=""><input id="cw" type="number" min="3" max="20" step="0.25" aria-label="Width in inches" placeholder="W"> × <input id="ch" type="number" min="3" max="20" step="0.25" aria-label="Height in inches" placeholder="H"> in</span>
+    <span class="lab" id="sizeLabel" style="font-size:12.5px; color:var(--soft); font-weight:600"></span>
     <span class="saved" id="saved" role="status">Saved</span>
     <button class="btn" type="button" id="previewBtn">Preview book</button>
     <button class="btn dark" type="button" id="pdfBtn">
@@ -270,7 +279,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
         <button role="tab" id="t-layouts" aria-selected="true" type="button">Layouts</button>
         <button role="tab" id="t-text" aria-selected="false" type="button">Text</button>
         <button role="tab" id="t-elements" aria-selected="false" type="button">Elements</button>
-        <button role="tab" id="t-theme" aria-selected="false" type="button">Theme</button>
+        <button role="tab" id="t-background" aria-selected="false" type="button">Background</button>
       </div>
       <div class="pgswitch" id="pgSwitch" role="group" aria-label="Which page to edit"></div>
       <div class="panel" id="p-photos" hidden="">
@@ -284,9 +293,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       <div class="panel" id="p-layouts">
         <p class="note" id="layoutNote"></p>
         <div class="layouts" id="layoutGrid"></div>
-        <div class="bgctl" id="colorCtl"></div>
         <div class="bgctl" id="spaceCtl"></div>
-        <div class="bgctl" id="bgCtl"></div>
         <div class="check" id="check"></div>
       </div>
       <div class="panel" id="p-text" hidden="">
@@ -304,15 +311,10 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
         <p class="sec-lbl" style="margin-top:16px">ON THIS PAGE</p>
         <div id="elList"></div>
       </div>
-      <div class="panel" id="p-theme" hidden="">
-        <p class="note">The theme styles every page: background, photo borders and fonts. Your photos and text stay put.</p>
-        <div class="themes" id="themeGrid"></div>
-        <label class="f" for="sizeSel">Book size</label>
-        <select id="sizeSel"></select>
-        <div class="two" id="customSize" hidden="" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px">
-          <input id="cw" type="number" min="3" max="20" step="0.25" aria-label="Width in inches" placeholder="Width (in)">
-          <input id="ch" type="number" min="3" max="20" step="0.25" aria-label="Height in inches" placeholder="Height (in)">
-        </div>
+      <div class="panel" id="p-background" hidden="">
+        <p class="note" id="bgNote"></p>
+        <div id="colorCtl"></div>
+        <div class="bgctl" id="bgCtl"></div>
       </div>
     </aside>
   </div>
@@ -1093,7 +1095,7 @@ function setBg(pi, id){
   const pg = D().pages[pi], old = pg.bg || {};
   pg.bg = { photo: id, cx: .5, cy: .5, zoom: 1, blur: old.blur ?? .35, fade: old.fade ?? .2 };
   pickBg = null; sel = { p: pi, s: -1 }; say("upMsg", "");
-  showTab("layouts"); changed();
+  showTab("background"); changed();
 }
 function refreshBg(pi){
   const pg = D().pages[pi], el = document.querySelector(`#spread .pg[data-pi="${pi}"]`); if (!el || !hasBg(pg)) return;
@@ -1275,7 +1277,7 @@ function renderCtx(){
   const slot = sel && sel.s >= 0 && D().pages[sel.p] && slotAt(D().pages[sel.p], sel.s);
   if (!slot) {
     const pg = sel && D().pages[sel.p];
-    box.innerHTML = hasBg(pg) ? `<span class="hint">Drag an empty part of the page to move the background photo. Zoom and blur are in <b>Layouts</b>.</span>`
+    box.innerHTML = hasBg(pg) ? `<span class="hint">Drag an empty part of the page to move the background photo. Zoom and blur are in <b>Background</b>.</span>`
       : `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`;
     return;
   }
@@ -1339,7 +1341,7 @@ armed($("delSpread"), "Delete these pages", () => {
 });
 
 // ---- right: tool panels ----
-const TABS = ["photos", "layouts", "text", "elements", "theme"];
+const TABS = ["photos", "layouts", "text", "elements", "background"];
 function showTab(t){ TABS.forEach(x => { $("p-" + x).hidden = x !== t; $("t-" + x).setAttribute("aria-selected", x === t); }); renderPanels(); }
 TABS.forEach(t => $("t-" + t).addEventListener("click", () => showTab(t)));
 function currentPageIdx(){ const sp = spreads()[spreadIdx]; if (sel && sp.includes(sel.p)) return sel.p; return sp[0]; }
@@ -1363,9 +1365,7 @@ function renderPanels(){
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
-    renderPageColor(pi);
     renderSpacing(pi);
-    renderBgCtl(pi);
     renderCheck();
   }
   // photos
@@ -1389,20 +1389,25 @@ function renderPanels(){
   }
   // elements
   if (!$("p-elements").hidden) renderElements(pi);
-  // theme
-  if (!$("p-theme").hidden) {
-    $("themeGrid").replaceChildren(...Object.entries(THEMES).map(([k, t]) => {
-      const b = document.createElement("button"); b.type = "button"; b.className = D().theme === k ? "on" : "";
-      b.innerHTML = `<span class="sw" style="background:${t.sample.bg}; color:${t.sample.fg}; font:${t.sample.font}">${t.sample.text}</span><b style="font-size:13px">${t.name}</b>`;
-      b.addEventListener("click", () => { D().theme = k; changed(); });
-      return b;
-    }));
-    $("sizeSel").innerHTML = Object.entries(SIZES).map(([k, s]) => `<option value="${k}" ${D().size.key === k ? "selected" : ""}>${k === "custom" && D().size.key === "custom" ? sizeLabel(D().size) : s.label}</option>`).join("");
-    $("customSize").hidden = D().size.key !== "custom";
-    if (D().size.key === "custom") { $("cw").value = D().size.w; $("ch").value = D().size.h; }
+  // background (page colour + photo)
+  if (!$("p-background").hidden) {
+    $("bgNote").innerHTML = `Background of <b>${pageLabel(pi)}</b>. Use the Left / Right switch to change the other page.`;
+    renderPageColor(pi); renderBgCtl(pi);
   }
-  $("sizeLabel").textContent = `${sizeLabel(D().size)} · ${D().pages.length} pages`;
+  renderTopbar();
 }
+// theme + page size in the top bar
+function renderTopbar(){
+  const t = TH();
+  $("themeSel").innerHTML = Object.entries(THEMES).map(([k, th]) => `<option value="${k}" ${D().theme === k ? "selected" : ""}>${esc(th.name)}</option>`).join("");
+  $("themeSw").style.background = `linear-gradient(135deg, ${t.coverBg} 50%, ${t.bg} 50%)`;
+  if (document.activeElement !== $("sizeSel"))
+    $("sizeSel").innerHTML = Object.entries(SIZES).map(([k, s]) => `<option value="${k}" ${D().size.key === k ? "selected" : ""}>${k === "custom" && D().size.key === "custom" ? sizeLabel(D().size) : s.label}</option>`).join("");
+  $("customSize").hidden = D().size.key !== "custom";
+  if (D().size.key === "custom") { if (document.activeElement !== $("cw")) $("cw").value = D().size.w; if (document.activeElement !== $("ch")) $("ch").value = D().size.h; }
+  $("sizeLabel").textContent = `${D().pages.length} pages`;
+}
+$("themeSel").addEventListener("change", e => { D().theme = e.target.value; changed(); });
 // Font, size, colour, bold/italic/caps, alignment and spacing for one text box
 function styleControls(pi, page, t, open){
   const L = textLook(pi, page, t), th = TH(), role = t.role;
@@ -1560,7 +1565,7 @@ function renderPhotos(){
     b.addEventListener("dragstart", e => { e.dataTransfer.setData("text/x-photo", id); e.dataTransfer.effectAllowed = "copy"; });
     b.addEventListener("click", () => {
       if (pickBg !== null && D().pages[pickBg]) { setBg(pickBg, id); return; }
-      if (!sel || sel.s < 0) { say("upMsg", "Select a frame on the page first, then tap a photo. For a page background, use Layouts → Background photo."); return; }
+      if (!sel || sel.s < 0) { say("upMsg", "Select a frame on the page first, then tap a photo. For a page background, use the Background tab."); return; }
       putPhoto(sel.p, sel.s, id);
     });
     return b;
