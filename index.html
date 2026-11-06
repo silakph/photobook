@@ -284,6 +284,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       <div class="panel" id="p-layouts">
         <p class="note" id="layoutNote"></p>
         <div class="layouts" id="layoutGrid"></div>
+        <div class="bgctl" id="colorCtl"></div>
         <div class="bgctl" id="spaceCtl"></div>
         <div class="bgctl" id="bgCtl"></div>
         <div class="check" id="check"></div>
@@ -541,6 +542,15 @@ function styleTextBox(box, L, ppi){
 }
 // the layout's frames and text boxes, with any text boxes the user has moved or resized
 // the page's theme, with its own spacing and margin if set
+// per-theme page colour choices (the theme's own colours come first)
+const PALETTES = {
+  classic: ["#FFFFFF", "#F7F4EE", "#EFE9DF", "#E8ECEF", "#2E3440", "#1C1D21"],
+  christmas: ["#FFFDF8", "#0E1B33", "#B3172B", "#13774A", "#F6EEDC", "#24395E"],
+  birthday: ["#FFFFFF", "#FFD100", "#0055BF", "#DA291C", "#FFF6CC", "#E8F0FF"],
+  debut: ["#FBF6EC", "#12306B", "#F6EEDC", "#DCE4F2", "#0B1E46", "#FFFFFF"],
+  fullbleed: ["#FFFFFF", "#14161B", "#F2F0EB", "#D9DDE3", "#8F9BAE", "#2B2F36"]
+};
+const pageBg = (pi, page) => (page && page.bgColor) || (isCoverPage(pi) ? TH().coverBg : TH().bg);
 const pageTheme = page => ({ ...TH(), ...(page && page.gap != null ? { gap: page.gap } : {}), ...(page && page.margin != null ? { margin: page.margin } : {}) });
 const layoutCount = page => geom(page.layout, D().size.w, D().size.h, TH()).slots.length;
 function pageGeom(page){
@@ -829,7 +839,7 @@ function renderPage(pi, ppi, mode){
   const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = pi !== null && pi !== undefined && isCoverPage(pi);
   const el = document.createElement("div"); el.className = "pg";
   el.style.width = W * ppi + "px"; el.style.height = H * ppi + "px";
-  el.style.background = isCover ? th.coverBg : th.bg;
+  el.style.background = page ? pageBg(pi, page) : (isCover ? th.coverBg : th.bg);
   if (!page) { el.classList.add("blank"); return el; }
   el.dataset.pi = pi;
   if (mode === "edit" && hasBg(page)) {
@@ -863,7 +873,7 @@ function renderPage(pi, ppi, mode){
     if (e.target.closest(".slot") || e.target.closest(".tx")) return;
     sel = { p: pi, s: -1 }; markSelected(); renderPanels();
   });
-  if (hasBg(page)) el.appendChild(bgLayer(page, isCover ? th.coverBg : th.bg, W, H, ppi));
+  if (hasBg(page)) el.appendChild(bgLayer(page, pageBg(pi, page), W, H, ppi));
   if (mode === "edit") {
     // drop a photo on an empty part of the page to make it the background
     el.addEventListener("dragover", e => { if (e.target.closest(".slot")) return; if ([...e.dataTransfer.types].includes("text/x-photo")) { e.preventDefault(); el.classList.add("bgdrop"); } });
@@ -974,6 +984,26 @@ function addFrameHandles(s, pi, si, rect, ppi){
   };
   drag(mv, "mv"); drag(rs, "rs");
 }
+// page colour: theme palette swatches + any colour
+function renderPageColor(pi){
+  const page = D().pages[pi], box = $("colorCtl"); if (!page) { box.innerHTML = ""; return; }
+  const th = TH(), def = (isCoverPage(pi) ? th.coverBg : th.bg).toUpperCase(), cur = pageBg(pi, page).toUpperCase();
+  const pal = [...new Set([def, th.bg, th.coverBg, ...(PALETTES[D().theme] || PALETTES.classic)].map(c => c.toUpperCase()))];
+  box.innerHTML = `<p class="sec-lbl">PAGE COLOUR</p>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center">
+      ${pal.map(c => `<button type="button" data-pc="${c}" aria-label="Page colour ${c}${c === def ? " (theme)" : ""}" aria-pressed="${c === cur}"
+        style="position:relative; width:32px; height:32px; border-radius:8px; padding:0; background:${c}; border:${c === cur ? "3px solid var(--blue)" : "1px solid var(--line)"}">${c === def ? '<span style="position:absolute; right:-4px; top:-6px; font-size:9px; font-weight:800; background:var(--ink); color:#fff; border-radius:4px; padding:0 3px">T</span>' : ""}</button>`).join("")}
+      <input type="color" id="pcPick" value="${/^#[0-9A-F]{6}$/.test(cur) ? cur : "#FFFFFF"}" aria-label="Pick any page colour" style="width:38px; height:32px; padding:0; border:1px solid var(--line); border-radius:8px; background:#FFFFFF">
+    </div>
+    <p class="note" style="margin:6px 0 0">T = the theme’s colour for ${isCoverPage(pi) ? "covers" : "pages"}. Text colours don’t change, so check they still stand out.</p>
+    <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap"><button class="btn small" type="button" id="pcAll">Use on all inside pages</button><button class="btn small" type="button" id="pcReset">Reset</button></div>`;
+  const set = c => { if (c.toUpperCase() === def) delete page.bgColor; else page.bgColor = c.toUpperCase(); };
+  box.querySelectorAll("[data-pc]").forEach(b => b.onclick = () => { set(b.dataset.pc); changed(); });
+  $("pcPick").oninput = e => { set(e.target.value); queueSave(); const el = document.querySelector(`#spread .pg[data-pi="${pi}"]`); if (el) el.style.background = pageBg(pi, page); if (hasBg(page)) refreshBg(pi); };
+  $("pcPick").onchange = () => changed();
+  $("pcAll").onclick = () => { D().pages.forEach((pg, i) => { if (isCoverPage(i)) return; if (page.bgColor && !isCoverPage(pi)) pg.bgColor = page.bgColor; else if (page.bgColor) pg.bgColor = page.bgColor; else delete pg.bgColor; }); changed(); $("pcAll").textContent = "Done: all inside pages match"; };
+  $("pcReset").onclick = () => { delete page.bgColor; changed(); };
+}
 // space between photos and page margin, per page
 function renderSpacing(pi){
   const page = D().pages[pi], box = $("spaceCtl"); if (!page) { box.innerHTML = ""; return; }
@@ -1067,7 +1097,7 @@ function setBg(pi, id){
 }
 function refreshBg(pi){
   const pg = D().pages[pi], el = document.querySelector(`#spread .pg[data-pi="${pi}"]`); if (!el || !hasBg(pg)) return;
-  const th = TH(), fresh = bgLayer(pg, isCoverPage(pi) ? th.coverBg : th.bg, D().size.w, D().size.h, stagePPI());
+  const fresh = bgLayer(pg, pageBg(pi, pg), D().size.w, D().size.h, stagePPI());
   const old = el.querySelector(".bgph");
   if (!old) { el.prepend(fresh); return; }
   const img = old.querySelector("img"), fimg = fresh.querySelector("img");
@@ -1333,6 +1363,7 @@ function renderPanels(){
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
+    renderPageColor(pi);
     renderSpacing(pi);
     renderBgCtl(pi);
     renderCheck();
@@ -1643,8 +1674,8 @@ async function drawPage(pi, o){
   const ctx = cv.getContext("2d", { alpha: false });
   ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, cw, ch);
   const X = v => (v + sl + b) * dpi; // inches on the trimmed page -> canvas pixels
-  ctx.fillStyle = isCover ? th.coverBg : th.bg; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
-  if (hasBg(page)) await drawBgPhoto(ctx, page.bg, isCover ? th.coverBg : th.bg, W, H, b, X, dpi);
+  ctx.fillStyle = pageBg(pi, page); ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
+  if (hasBg(page)) await drawBgPhoto(ctx, page.bg, pageBg(pi, page), W, H, b, X, dpi);
   const G = pageGeom(page);
   if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
   for (const [si, r0] of G.slots.entries()) {
