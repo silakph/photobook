@@ -118,6 +118,11 @@ h1,h2{margin:0}
 .slot .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#E9ECF2; color:#8A93A6; font-size:12px; font-weight:600; flex-direction:column; gap:4px; text-align:center; padding:6px}
 .slot img{position:absolute; max-width:none; user-select:none; -webkit-user-drag:none; pointer-events:none}
 .slot.sel{outline:3px solid var(--blue); outline-offset:-3px; z-index:2}
+.slot.has{cursor:grab} .slot.grabbing{cursor:grabbing}
+.editing .pg.cur{outline:2px solid rgba(47,91,211,.55); outline-offset:-2px}
+.pgswitch{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; padding:10px 16px 0}
+.pgswitch button{height:36px; border-radius:8px; border:1px solid var(--line); background:#FFFFFF; font-weight:600; font-size:13px; color:var(--soft)}
+.pgswitch button[aria-pressed="true"]{border:2px solid var(--blue); background:var(--blue-bg); color:var(--blue)}
 .slot.drop{outline:3px dashed var(--blue); outline-offset:-3px}
 .slot .warnb{position:absolute; left:4px; top:4px; padding:1px 6px; border-radius:999px; background:var(--warn-bg); color:var(--warn); font-size:10px; font-weight:700; z-index:1}
 .tx{position:absolute; display:flex; align-items:center; outline:none; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.25; cursor:text}
@@ -230,12 +235,13 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       </div>
     </main>
     <aside class="tools">
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" id="toolTabs">
         <button role="tab" id="t-photos" aria-selected="false" type="button">Photos</button>
         <button role="tab" id="t-layouts" aria-selected="true" type="button">Layouts</button>
         <button role="tab" id="t-text" aria-selected="false" type="button">Text</button>
         <button role="tab" id="t-theme" aria-selected="false" type="button">Theme</button>
       </div>
+      <div class="pgswitch" id="pgSwitch" role="group" aria-label="Which page to edit"></div>
       <div class="panel" id="p-photos" hidden="">
         <div class="upl">
           <label class="btn dark" style="justify-content:center">+ Add photos<input id="upload" type="file" accept="image/jpeg,image/png,image/webp" multiple="" hidden=""></label>
@@ -645,6 +651,10 @@ function renderPage(pi, ppi, mode){
   el.style.background = isCover ? th.coverBg : th.bg;
   if (!page) { el.classList.add("blank"); return el; }
   el.dataset.pi = pi;
+  if (mode === "edit") el.addEventListener("click", e => {
+    if (e.target.closest(".slot") || e.target.closest(".tx")) return;
+    sel = { p: pi, s: -1 }; markSelected(); renderPanels();
+  });
   if (hasBg(page)) el.appendChild(bgLayer(page, isCover ? th.coverBg : th.bg, W, H, ppi));
   if (mode === "edit") {
     // drop a photo on an empty part of the page to make it the background
@@ -673,6 +683,7 @@ function renderPage(pi, ppi, mode){
       placeImg(img, ph, (fw - 2 * inset) * ppi, (fh - 2 * inset) * ppi, slot);
       photoThumbURL(slot.photo).then(u => { if (u) img.src = u; });
       inner.appendChild(img);
+      if (mode === "edit") s.classList.add("has");
       if (mode === "edit" && printPPI(ph, { w: fw - 2 * inset, h: fh - 2 * inset }, slot) < LOW_PPI) s.insertAdjacentHTML("beforeend", '<span class="warnb">Low resolution for print</span>');
     } else {
       inner.innerHTML = `<div class="ph">${mode === "edit" ? '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="30" height="24" rx="2"></rect><circle cx="14" cy="16" r="3"></circle><path d="M5 28l9-8 7 6 5-4 9 8"></path></svg>Drop a photo' : ""}</div>`;
@@ -812,9 +823,31 @@ function renderStage(){
   $("prevSpread").disabled = spreadIdx === 0; $("nextSpread").disabled = spreadIdx === sps.length - 1;
   const inside = sp[0] !== 0;
   $("moveLeft").disabled = !inside || spreadIdx <= 1; $("moveRight").disabled = !inside || spreadIdx >= sps.length - 1; $("delSpread").disabled = !inside;
-  renderCtx();
+  renderCtx(); renderPageSwitch();
+  const cur = currentPageIdx();
+  document.querySelectorAll("#spread .pg").forEach(pg => pg.classList.toggle("cur", pg.dataset.pi !== undefined && +pg.dataset.pi === cur && sp.length > 1));
 }
-function markSelected(){ document.querySelectorAll("#spread .slot").forEach(s => s.classList.toggle("sel", !!sel && +s.dataset.p === sel.p && +s.dataset.s === sel.s)); renderCtx(); }
+function markSelected(){
+  document.querySelectorAll("#spread .slot").forEach(s => s.classList.toggle("sel", !!sel && +s.dataset.p === sel.p && +s.dataset.s === sel.s));
+  const cur = currentPageIdx();
+  document.querySelectorAll("#spread .pg").forEach(pg => pg.classList.toggle("cur", pg.dataset.pi !== undefined && +pg.dataset.pi === cur && spreads()[spreadIdx].length > 1));
+  renderCtx(); renderPageSwitch();
+}
+// the left/right page switch above the tool panels
+function renderPageSwitch(){
+  const sp = spreads()[spreadIdx], box = $("pgSwitch");
+  const pages = sp.filter(x => x !== null);
+  box.hidden = pages.length < 2;
+  if (pages.length < 2) { box.replaceChildren(); return; }
+  const cur = currentPageIdx();
+  box.replaceChildren(...pages.map((pi, i) => {
+    const b = document.createElement("button"); b.type = "button";
+    b.textContent = `${i ? "Right" : "Left"} · page ${pi}`;
+    b.setAttribute("aria-pressed", pi === cur);
+    b.addEventListener("click", () => { sel = { p: pi, s: -1 }; markSelected(); renderPanels(); });
+    return b;
+  }));
+}
 addEventListener("resize", () => { if (!$("editor").hidden) renderStage(); });
 
 // slot interactions: select, drop a photo, drag to reposition
@@ -830,10 +863,13 @@ function wireSlot(s, inner, pi, si){
   let start = null;
   s.addEventListener("pointerdown", e => {
     const page = D().pages[pi], slot = page.slots[si], ph = slot.photo && D().photos[slot.photo];
-    if (!ph || !(sel && sel.p === pi && sel.s === si)) return;
+    if (!ph || e.button > 0) return;
     const img = inner.querySelector("img"); if (!img) return;
-    start = { x: e.clientX, y: e.clientY, cx: slot.cx, cy: slot.cy, moved: false };
-    s.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    if (!(sel && sel.p === pi && sel.s === si)) { sel = { p: pi, s: si }; markSelected(); s.dataset.fresh = "1"; }
+    start = { x: e.clientX, y: e.clientY, cx: slot.cx ?? .5, cy: slot.cy ?? .5, moved: false };
+    try { s.setPointerCapture(e.pointerId); } catch {}
+    s.classList.add("grabbing");
     const w = inner.clientWidth, h = inner.clientHeight;
     const move = ev => {
       const c = crop(ph, w, h, slot), dx = (ev.clientX - start.x) / c.s, dy = (ev.clientY - start.y) / c.s;
@@ -843,7 +879,10 @@ function wireSlot(s, inner, pi, si){
       placeImg(img, ph, w, h, slot);
     };
     const up = () => { s.removeEventListener("pointermove", move); s.removeEventListener("pointerup", up); s.removeEventListener("pointercancel", up);
-      if (start.moved) { s.dataset.dragged = "1"; queueSave(); renderSpreadList(); } start = null; };
+      s.classList.remove("grabbing");
+      if (start.moved) { s.dataset.dragged = "1"; queueSave(); renderSpreadList(); }
+      if (s.dataset.fresh === "1") { s.dataset.fresh = ""; renderPanels(); }
+      start = null; };
     s.addEventListener("pointermove", move); s.addEventListener("pointerup", up); s.addEventListener("pointercancel", up);
   });
 }
@@ -866,7 +905,7 @@ function renderCtx(){
   if (!slot) { box.innerHTML = `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`; return; }
   if (!slot.photo) { box.innerHTML = `<span class="hint">Frame selected: tap a photo in <b>Photos</b>, or drag one here.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>`;
     $("cxPhotos").onclick = () => showTab("photos"); return; }
-  box.innerHTML = `<span class="hint">Drag the photo to reposition.</span>
+  box.innerHTML = `<span class="hint">Drag the photo to move it. Zoom in for more room to move.</span>
     <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600">Zoom <input type="range" id="cxZoom" min="1" max="3" step="0.01" value="${slot.zoom || 1}"></label>
     <button class="btn small" type="button" id="cxFit">Fit</button><button class="btn small" type="button" id="cxReplace">Replace</button><button class="btn small" type="button" id="cxRemove">Remove</button>`;
   $("cxZoom").oninput = e => {
@@ -926,7 +965,7 @@ armed($("delSpread"), "Delete these pages", () => {
 const TABS = ["photos", "layouts", "text", "theme"];
 function showTab(t){ TABS.forEach(x => { $("p-" + x).hidden = x !== t; $("t-" + x).setAttribute("aria-selected", x === t); }); renderPanels(); }
 TABS.forEach(t => $("t-" + t).addEventListener("click", () => showTab(t)));
-function currentPageIdx(){ if (sel) return sel.p; const sp = spreads()[spreadIdx]; return sp[0]; }
+function currentPageIdx(){ const sp = spreads()[spreadIdx]; if (sel && sp.includes(sel.p)) return sel.p; return sp[0]; }
 function renderPanels(){
   const pi = currentPageIdx(), page = D().pages[pi];
   // layouts
