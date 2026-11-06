@@ -369,7 +369,12 @@ const LAYOUTS = [
   ["one", "1 photo"], ["full", "Full-bleed"], ["two", "2 photos"], ["twoStack", "2 stacked"], ["three", "3 photos"],
   ["four", "4 photos"], ["six", "6 photos"], ["photoText", "Photo + text"], ["text", "Text only"]
 ];
-const LAYOUT_NAME = Object.fromEntries([...LAYOUTS, ["cover", "Cover"]]);
+// front and back covers have their own set
+const COVER_LAYOUTS = [
+  ["cover", "Photo + title"], ["coverFull", "Full photo"], ["coverTitleTop", "Title on top"],
+  ["coverFramed", "Framed photo"], ["coverCollage", "Collage"], ["coverTitleOnly", "Title only"]
+];
+const LAYOUT_NAME = Object.fromEntries([...LAYOUTS, ...COVER_LAYOUTS]);
 
 // Where the frames and text boxes go on a page, in inches from the page's top-left (trim) corner
 function geom(layout, W, H, th){
@@ -377,7 +382,23 @@ function geom(layout, W, H, th){
   const R = (x, y, w, h) => ({ x, y, w, h });
   const k = Math.min(W, H) / 8; // text scales with the page
   const cap = .55 * k;
+  const off = th.deco === "baubles" ? 1.1 * k : th.deco === "bricks" ? .45 * k : 0; // room for cover decorations at the top
+  const coverText = (y) => [
+    { role: "title", rect: R(ix, y, iw, ih * .2), size: 40 * k, align: "center" },
+    { role: "caption", rect: R(ix, y + ih * .21, iw, ih * .11), size: 13 * k, align: "center" }];
   switch (layout) {
+    case "coverFull": return { slots: [R(0, 0, W, H)], texts: [
+      { role: "title", rect: R(ix, H - m - 1.5 * k, iw, 1 * k), size: 40 * k, align: "left", over: true },
+      { role: "caption", rect: R(ix, H - m - .5 * k, iw, .45 * k), size: 13 * k, align: "left", over: true }] };
+    case "coverTitleTop": return { slots: [R(ix, iy + off + ih * .34, iw, ih * .66 - off)], texts: [
+      { role: "title", rect: R(ix, iy + off, iw, ih * .2), size: 40 * k, align: "center" },
+      { role: "caption", rect: R(ix, iy + off + ih * .2, iw, ih * .1), size: 13 * k, align: "center" }] };
+    case "coverFramed": { const w = iw * .62, h = Math.min(ih * .56 - off, w * 1.15); return { slots: [R(ix + (iw - w) / 2, iy + off + (ih * .6 - off - h) / 2, w, h)], texts: coverText(iy + ih * .64) }; }
+    case "coverCollage": { const top = iy + off, ah = ih * .62 - off, w = (iw - g) / 2, h = (ah - g) / 2;
+      return { slots: [R(ix, top, w, h), R(ix + w + g, top, w, h), R(ix, top + h + g, w, h), R(ix + w + g, top + h + g, w, h)], texts: coverText(iy + ih * .66) }; }
+    case "coverTitleOnly": return { slots: [], texts: [
+      { role: "title", rect: R(ix, iy + off + (ih - off) * .3, iw, (ih - off) * .24), size: 46 * k, align: "center" },
+      { role: "caption", rect: R(ix + iw * .1, iy + off + (ih - off) * .55, iw * .8, (ih - off) * .16), size: 14 * k, align: "center" }] };
     case "cover":
       if (th.overCover) return { slots: [R(0, 0, W, H)], texts: [
         { role: "title", rect: R(ix, H - m - 1.5 * k, iw, 1 * k), size: 40 * k, align: "left", over: true },
@@ -444,7 +465,7 @@ function newPage(layout){ return { id: uid(), layout, slots: [], texts: { title:
 function newBookData(sizeKey, theme, custom, plan){
   const sz = sizeKey === "custom" ? { key: "custom", w: custom.w, h: custom.h } : { key: sizeKey, w: SIZES[sizeKey].w, h: SIZES[sizeKey].h };
   const inside = (plan && plan.length ? plan : ["one", "four", "two", "photoText"]).map(newPage);
-  return { ver: 1, size: sz, theme, photos: {}, pages: [newPage("cover"), ...inside] };
+  return { ver: 1, size: sz, theme, photos: {}, pages: [{ ...newPage("cover"), kind: "front" }, ...inside, { ...newPage("coverTitleOnly"), kind: "back" }] };
 }
 // make sure a page has at least as many slot records as its layout has frames (extra ones are kept for switching back)
 function ensureSlots(page, n){ while (page.slots.length < n) page.slots.push({ photo: null, cx: .5, cy: .5, zoom: 1 }); }
@@ -470,11 +491,19 @@ const pageSize = () => D().size;
 
 // spreads: [cover], then pairs of inside pages
 function spreads(){
-  const p = D().pages, out = [[0]];
-  for (let i = 1; i < p.length; i += 2) out.push(p[i + 1] ? [i, i + 1] : [i, null]);
+  const p = D().pages, back = isBack(p.length - 1), end = back ? p.length - 1 : p.length, out = [[0]];
+  for (let i = 1; i < end; i += 2) out.push(i + 1 < end ? [i, i + 1] : [i, null]);
+  if (back) out.push([p.length - 1]);
   return out;
 }
-const spreadName = sp => sp[0] === 0 ? "Cover" : sp[1] ? `${sp[0]} – ${sp[1]}` : `${sp[0]}`;
+const isBack = pi => { const p = D().pages; return pi > 0 && pi === p.length - 1 && !!p[pi] && p[pi].kind === "back"; };
+const isCoverPage = pi => pi === 0 || isBack(pi);
+const insideCount = () => D().pages.length - 1 - (isBack(D().pages.length - 1) ? 1 : 0);
+const pageLabel = pi => pi === 0 ? "the front cover" : isBack(pi) ? "the back cover" : `page ${pi}`;
+const shortLabel = pi => pi === 0 ? "front cover" : isBack(pi) ? "back cover" : String(pi);
+const spreadName = sp => sp[0] === 0 ? "Front cover" : isBack(sp[0]) ? "Back cover" : sp[1] ? `${sp[0]} – ${sp[1]}` : `${sp[0]}`;
+// the full-photo cover layouts put titles over the photo and drop the photo frame
+const fullCover = (pi, page) => isCoverPage(pi) && (page.layout === "coverFull" || (page.layout === "cover" && TH().overCover));
 
 // ===================== storage =====================
 async function photoThumbURL(id){
@@ -579,7 +608,7 @@ function renderTemplates(){
     cov.innerHTML = miniCover(t.theme, sz, t.title, 150);
     cov.addEventListener("click", () => openNewDialog(t));
     const info = document.createElement("div");
-    info.innerHTML = `<b>${esc(t.name)}</b><div class="meta">${esc(THEMES[t.theme].name)} theme · ${esc(SIZES[t.size].label)} · ${t.pages.length} pages + cover</div>
+    info.innerHTML = `<b>${esc(t.name)}</b><div class="meta">${esc(THEMES[t.theme].name)} theme · ${esc(SIZES[t.size].label)} · ${t.pages.length} pages + front &amp; back covers</div>
       <p style="margin:6px 0 0; font-size:13px">${esc(t.desc)}</p>
       <div class="plan" aria-hidden="true" style="margin-top:8px">${t.pages.map(k => `<i>${LAY(k, 16)}</i>`).join("")}</div>`;
     const acts = document.createElement("div"); acts.className = "acts";
@@ -612,6 +641,9 @@ async function openBook(id){
   if (error) { say("libMsg", "Couldn’t open that book. " + errText(error), true); return; }
   BOOK = data; BOOK.data = { ...newBookData("8x8", "classic"), ...(data.data || {}) };
   if (!data.data || !data.data.pages) BOOK.data.pages = newBookData("8x8", "classic").pages;
+  const pg = BOOK.data.pages;
+  pg[0].kind = "front";
+  if (pg.length < 2 || pg[pg.length - 1].kind !== "back") { pg.push({ ...newPage("coverTitleOnly"), kind: "back" }); setTimeout(queueSave, 0); }
   thumbURL.forEach(p => p.then(u => u && URL.revokeObjectURL(u))); thumbURL.clear();
   spreadIdx = 0; sel = null;
   history.replaceState(null, "", "#book=" + id);
@@ -645,7 +677,7 @@ function changed(opts = {}){ queueSave(); if (opts.stage !== false) renderStage(
 
 // ---- rendering a page as HTML (editor, thumbnails and preview share this) ----
 function renderPage(pi, ppi, mode){
-  const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = pi === 0;
+  const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = pi !== null && pi !== undefined && isCoverPage(pi);
   const el = document.createElement("div"); el.className = "pg";
   el.style.width = W * ppi + "px"; el.style.height = H * ppi + "px";
   el.style.background = isCover ? th.coverBg : th.bg;
@@ -669,7 +701,7 @@ function renderPage(pi, ppi, mode){
     const slot = page.slots[si], s = document.createElement("div");
     s.className = "slot"; s.dataset.p = pi; s.dataset.s = si;
     let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
-    if (th.frame && page.layout !== "full" && !(isCover && th.overCover)) {
+    if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
       inset = th.frame.width;
       s.style.background = isCover && th.coverFrame ? th.coverFrame : th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
       if (th.frame.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
@@ -739,14 +771,14 @@ function setBg(pi, id){
 }
 function refreshBg(pi){
   const pg = D().pages[pi], el = document.querySelector(`#spread .pg[data-pi="${pi}"]`); if (!el || !hasBg(pg)) return;
-  const th = TH(), fresh = bgLayer(pg, pi === 0 ? th.coverBg : th.bg, D().size.w, D().size.h, stagePPI());
+  const th = TH(), fresh = bgLayer(pg, isCoverPage(pi) ? th.coverBg : th.bg, D().size.w, D().size.h, stagePPI());
   const old = el.querySelector(".bgph"); if (old) old.replaceWith(fresh); else el.prepend(fresh);
 }
 let pickBg = null;
 function renderBgCtl(pi){
   const page = D().pages[pi], box = $("bgCtl");
   if (!page) { box.innerHTML = ""; return; }
-  const where = pi === 0 ? "the cover" : `page ${pi}`;
+  const where = pageLabel(pi);
   if (!hasBg(page)) {
     box.innerHTML = `<p class="sec-lbl">BACKGROUND PHOTO</p>
       <p class="note">Fill ${where} with a photo behind the layout, then blur it so your frames and text stand out.</p>
@@ -810,7 +842,7 @@ function decoSVG(kind, W, H){
 
 // ---- the open spread ----
 function stagePPI(){
-  const sp = spreads()[spreadIdx], W = D().size.w, H = D().size.h, n = sp[0] === 0 ? 1 : 2;
+  const sp = spreads()[spreadIdx], W = D().size.w, H = D().size.h, n = sp.length;
   const box = $("stage"), aw = box.clientWidth - 48, ah = box.clientHeight - 150;
   return Math.max(20, Math.min(aw / (W * n), ah / H, 110));
 }
@@ -819,10 +851,10 @@ function renderStage(){
   const sp = sps[spreadIdx], ppi = stagePPI(), box = $("spread");
   box.classList.add("editing");
   box.replaceChildren(...sp.map(pi => renderPage(pi, ppi, "edit")));
-  $("spreadLabel").textContent = sp[0] === 0 ? "Cover" : `Pages ${spreadName(sp)} of ${D().pages.length - 1}`;
+  $("spreadLabel").textContent = isCoverPage(sp[0]) ? spreadName(sp) : `Pages ${spreadName(sp)} of ${insideCount()}`;
   $("prevSpread").disabled = spreadIdx === 0; $("nextSpread").disabled = spreadIdx === sps.length - 1;
-  const inside = sp[0] !== 0;
-  $("moveLeft").disabled = !inside || spreadIdx <= 1; $("moveRight").disabled = !inside || spreadIdx >= sps.length - 1; $("delSpread").disabled = !inside;
+  const inside = !isCoverPage(sp[0]);
+  $("moveLeft").disabled = !inside || spreadIdx <= 1; $("moveRight").disabled = !inside || spreadIdx >= sps.length - 1 || isCoverPage(sps[spreadIdx + 1][0]); $("delSpread").disabled = !inside;
   renderCtx(); renderPageSwitch();
   const cur = currentPageIdx();
   document.querySelectorAll("#spread .pg").forEach(pg => pg.classList.toggle("cur", pg.dataset.pi !== undefined && +pg.dataset.pi === cur && sp.length > 1));
@@ -925,7 +957,7 @@ function renderSpreadList(){
   const sps = spreads(), W = D().size.w, H = D().size.h, ppi = 60 / Math.max(W, H);
   $("spreadList").replaceChildren(...sps.map((sp, i) => {
     const b = document.createElement("button"); b.type = "button"; b.className = "spread-thumb" + (i === spreadIdx ? " on" : "");
-    b.setAttribute("aria-label", sp[0] === 0 ? "Cover" : `Pages ${spreadName(sp)}`);
+    b.setAttribute("aria-label", isCoverPage(sp[0]) ? spreadName(sp) : `Pages ${spreadName(sp)}`);
     const pp = document.createElement("div"); pp.className = "pp no-edit";
     sp.forEach(pi => pp.appendChild(renderPage(pi, ppi, "thumb")));
     const lab = document.createElement("span"); lab.textContent = spreadName(sp);
@@ -938,15 +970,15 @@ $("prevSpread").addEventListener("click", () => { spreadIdx--; sel = null; rende
 $("nextSpread").addEventListener("click", () => { spreadIdx++; sel = null; renderStage(); renderSpreadList(); renderPanels(); });
 $("addPages").addEventListener("click", () => {
   const p = D().pages, sp = spreads()[spreadIdx];
-  const at = sp[0] === 0 ? 1 : (sp[1] ?? sp[0]) + 1;
-  if (p.length % 2 === 0) p.splice(at, 0, newPage("one")); // keep inside pages in pairs
+  const at = sp[0] === 0 ? 1 : isBack(sp[0]) ? sp[0] : (sp[1] ?? sp[0]) + 1;
+  if (insideCount() % 2) p.splice(at, 0, newPage("one")); // keep inside pages in pairs
   else p.splice(at, 0, newPage("one"), newPage("four"));
-  spreadIdx = Math.min(spreads().length - 1, sp[0] === 0 ? 1 : spreadIdx + 1); sel = null; changed();
+  spreadIdx = Math.max(0, spreads().findIndex(x => x.includes(at))); sel = null; changed();
 });
 $("moveLeft").addEventListener("click", () => moveSpread(-1));
 $("moveRight").addEventListener("click", () => moveSpread(1));
 function moveSpread(dir){
-  const sps = spreads(), a = sps[spreadIdx], b = sps[spreadIdx + dir]; if (!b || b[0] === 0) return;
+  const sps = spreads(), a = sps[spreadIdx], b = sps[spreadIdx + dir]; if (!b || isCoverPage(b[0]) || isCoverPage(a[0])) return;
   const p = D().pages, ia = a.filter(x => x !== null), ib = b.filter(x => x !== null);
   const pa = ia.map(i => p[i]), pb = ib.map(i => p[i]);
   const first = Math.min(ia[0], ib[0]);
@@ -955,7 +987,7 @@ function moveSpread(dir){
   spreadIdx += dir; sel = null; changed();
 }
 armed($("delSpread"), "Delete these pages", () => {
-  const sp = spreads()[spreadIdx]; if (sp[0] === 0) return;
+  const sp = spreads()[spreadIdx]; if (isCoverPage(sp[0])) return;
   const idx = sp.filter(x => x !== null);
   D().pages.splice(idx[0], idx.length);
   spreadIdx = Math.max(0, spreadIdx - 1); sel = null; changed();
@@ -970,10 +1002,10 @@ function renderPanels(){
   const pi = currentPageIdx(), page = D().pages[pi];
   // layouts
   if (!$("p-layouts").hidden) {
-    const isCover = pi === 0;
-    $("layoutNote").innerHTML = isCover ? "The cover has its own layout. Pick a theme in <b>Theme</b> to change its look." : `Pick a layout for <b>page ${pi}</b>. Your photos move into the new frames.`;
+    const isCover = isCoverPage(pi);
+    $("layoutNote").innerHTML = `Pick a layout for <b>${pageLabel(pi)}</b>. Your photos move into the new frames.`;
     const W = 8, H = 8 * D().size.h / D().size.w;
-    $("layoutGrid").replaceChildren(...(isCover ? [] : LAYOUTS).map(([key, name]) => {
+    $("layoutGrid").replaceChildren(...(isCover ? COVER_LAYOUTS : LAYOUTS).map(([key, name]) => {
       const wrap = document.createElement("div");
       const b = document.createElement("button"); b.type = "button"; b.className = page && page.layout === key ? "on" : ""; b.setAttribute("aria-label", name);
       b.style.aspectRatio = `${W} / ${H}`;
@@ -992,7 +1024,7 @@ function renderPanels(){
   // text
   if (!$("p-text").hidden) {
     const G = page ? geom(page.layout, D().size.w, D().size.h, TH()) : { texts: [] };
-    $("textNote").innerHTML = G.texts.length ? `Text on <b>${pi === 0 ? "the cover" : "page " + pi}</b>. You can also type straight onto the page.` : `<b>${pi === 0 ? "The cover" : "Page " + pi}</b> has no text in this layout. Try <b>Photo + text</b> or <b>Text only</b> in Layouts.`;
+    $("textNote").innerHTML = G.texts.length ? `Text on <b>${pageLabel(pi)}</b>. You can also type straight onto the page.` : `<b>${pageLabel(pi).replace(/^./, c => c.toUpperCase())}</b> has no text in this layout. Try <b>Photo + text</b> or <b>Text only</b> in Layouts.`;
     $("textFields").replaceChildren(...G.texts.map(t => {
       const w = document.createElement("div");
       const id = "tf-" + t.role;
@@ -1093,7 +1125,7 @@ function issues(){
   d.pages.forEach((p, pi) => {
     const G = geom(p.layout, d.size.w, d.size.h, th); ensureSlots(p, G.slots.length);
     G.slots.forEach((r, si) => {
-      const s = p.slots[si], inset = th.frame && p.layout !== "full" && !(pi === 0 && th.overCover) ? th.frame.width : 0;
+      const s = p.slots[si], inset = th.frame && p.layout !== "full" && !fullCover(pi, p) ? th.frame.width : 0;
       if (!s.photo) out.push({ pi, kind: "empty" });
       else if (d.photos[s.photo] && printPPI(d.photos[s.photo], { w: r.w - 2 * inset, h: r.h - 2 * inset }, s) < LOW_PPI) out.push({ pi, kind: "low" });
     });
@@ -1102,7 +1134,7 @@ function issues(){
 }
 function renderCheck(){
   const iss = issues(), low = iss.filter(x => x.kind === "low"), empty = iss.filter(x => x.kind === "empty");
-  const pages = l => [...new Set(l.map(x => x.pi))].map(p => `<button type="button" data-p="${p}">${p === 0 ? "cover" : p}</button>`).join(", ");
+  const pages = l => [...new Set(l.map(x => x.pi))].map(p => `<button type="button" data-p="${p}">${shortLabel(p)}</button>`).join(", ");
   $("check").innerHTML = `<p style="font-size:11px; font-weight:600; color:var(--soft); letter-spacing:.5px">PRINT CHECK</p>
     ${!iss.length ? '<p><i></i>Every page is ready to print.</p>' : ""}
     ${low.length ? `<p><i class="w"></i><span>${low.length} photo${low.length > 1 ? "s" : ""} may print blurry: page ${pages(low)}</span></p>` : ""}
@@ -1117,11 +1149,11 @@ function renderAll(){ renderStage(); renderSpreadList(); showTab("layouts"); }
 let pvIdx = 0;
 function renderPreview(){
   const sps = spreads(); pvIdx = clamp(pvIdx, 0, sps.length - 1);
-  const sp = sps[pvIdx], W = D().size.w, H = D().size.h, n = sp[0] === 0 ? 1 : 2;
+  const sp = sps[pvIdx], W = D().size.w, H = D().size.h, n = sp.length;
   const ppi = Math.min((innerWidth - 80) / (W * n), (innerHeight - 140) / H);
   const box = $("pvSpread"); box.className = "spread no-edit";
   box.replaceChildren(...sp.map(pi => renderPage(pi, ppi, "view")));
-  $("pvLabel").textContent = sp[0] === 0 ? "Cover" : `Pages ${spreadName(sp)}`;
+  $("pvLabel").textContent = isCoverPage(sp[0]) ? spreadName(sp) : `Pages ${spreadName(sp)}`;
   $("pvPrev").disabled = pvIdx === 0; $("pvNext").disabled = pvIdx === sps.length - 1;
 }
 $("previewBtn").addEventListener("click", () => { pvIdx = spreadIdx; $("preview").hidden = false; renderPreview(); $("pvClose").focus(); });
@@ -1148,12 +1180,12 @@ function pdfSummary(){
   const pw = Math.round((W + 2 * o.bleed + 2 * o.slug) * o.dpi), ph = Math.round((H + 2 * o.bleed + 2 * o.slug) * o.dpi);
   const mb = Math.round(n * pw * ph * (o.dpi >= 300 ? .16 : .12) / 1048576);
   const iss = issues(), low = iss.filter(x => x.kind === "low").length, empty = iss.filter(x => x.kind === "empty").length;
-  $("pdfSummary").innerHTML = `<span><b>${n} pages</b> (cover + ${n - 1}) · ${esc(sizeLabel(D().size))}</span>
+  $("pdfSummary").innerHTML = `<span><b>${n} pages</b> (front and back covers + ${insideCount()} inside) · ${esc(sizeLabel(D().size))}</span>
     <span>${pw.toLocaleString()} × ${ph.toLocaleString()} px per page${o.bleed ? " with bleed" : ""}</span>
     <span style="color:var(--soft)">Estimated file: about ${Math.max(1, mb)} MB${o.coverSeparate ? " (two files: cover and inside pages)" : ""}</span>
     ${low ? `<span class="w">${low} photo${low > 1 ? "s are" : " is"} below print quality. Check the Print check list.</span>` : ""}
     ${empty ? `<span class="w">${empty} empty frame${empty > 1 ? "s" : ""} will print blank.</span>` : ""}
-    ${(D().pages.length - 1) % 2 ? '<span class="w">Odd number of inside pages: most printers need an even number.</span>' : ""}`;
+    ${insideCount() % 2 ? '<span class="w">Odd number of inside pages: most printers need an even number.</span>' : ""}`;
 }
 async function loadJsPDF(){
   if (window.jspdf) return;
@@ -1161,7 +1193,7 @@ async function loadJsPDF(){
 }
 // draw one page at print resolution: a canvas of (page + bleed + slug) at dpi
 async function drawPage(pi, o){
-  const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = pi === 0;
+  const d = D(), th = TH(), page = d.pages[pi], W = d.size.w, H = d.size.h, isCover = isCoverPage(pi);
   const b = o.bleed, sl = o.slug, dpi = o.dpi;
   const cw = Math.round((W + 2 * b + 2 * sl) * dpi), ch = Math.round((H + 2 * b + 2 * sl) * dpi);
   const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
@@ -1181,7 +1213,7 @@ async function drawPage(pi, o){
     if (r0.x + r0.w >= W - e) r.w = W + b - r.x;
     if (r0.y + r0.h >= H - e) r.h = H + b - r.y;
     let inset = 0;
-    if (th.frame && page.layout !== "full" && !(isCover && th.overCover)) {
+    if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
       inset = th.frame.width;
       ctx.save();
       if (th.frame.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
@@ -1297,7 +1329,8 @@ $("pdfGo").addEventListener("click", async () => {
     const { jsPDF } = window.jspdf;
     const PW = d.size.w + 2 * o.bleed + 2 * o.slug, PH = d.size.h + 2 * o.bleed + 2 * o.slug, orient = PW > PH ? "landscape" : "portrait";
     const all = d.pages.map((_, i) => i);
-    const groups = o.coverSeparate ? [["cover", [0]], ["pages", all.slice(1)]] : [["book", all]];
+    const covers = all.filter(isCoverPage), inside = all.filter(i => !isCoverPage(i));
+    const groups = o.coverSeparate ? [["cover", covers], ["pages", inside]] : [["book", all]];
     const base = (BOOK.title || "photobook").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "photobook";
     let done = 0;
     for (const [part, idx] of groups) {
@@ -1306,7 +1339,7 @@ $("pdfGo").addEventListener("click", async () => {
       doc.setProperties({ title: `${BOOK.title}${part === "cover" ? " (cover)" : ""}`, creator: "Photobook" });
       for (const [k, pi] of idx.entries()) {
         if (cancelExport) throw new Error("Stopped.");
-        setP(`Making ${pi === 0 ? "the cover" : `page ${pi} of ${d.pages.length - 1}`}…`, done / d.pages.length);
+        setP(`Making ${isCoverPage(pi) ? pageLabel(pi) : `page ${pi} of ${insideCount()}`}…`, done / d.pages.length);
         const cv = await drawPage(pi, o);
         const url = cv.toDataURL("image/jpeg", o.dpi >= 300 ? .93 : .85);
         cv.width = cv.height = 1;
