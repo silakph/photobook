@@ -537,7 +537,7 @@ function textLook(pi, page, t){
   return {
     family, weight, italic: cs.italic ?? (base.style === "italic"),
     size: cs.size || Math.round(t.size * (page.textScale || 1) * 2) / 2,
-    color: cs.color || (t.over ? "#FFFFFF" : isCover ? th.coverInk : (t.role === "title" && th.accent ? th.accent : th.ink)),
+    color: cs.color || (t.over ? "#FFFFFF" : (() => { const P = pageInk(pi, page); return t.role === "title" && P.accent ? P.accent : P.ink; })()),
     align: cs.align || t.align, upper: !!cs.upper, spacing: cs.spacing || 0, lh: cs.lh || 1.25, over: !!t.over,
     boldOn: weight >= w[1] && w[1] > w[0], box: cs.box || null
   };
@@ -568,6 +568,29 @@ const PALETTES = {
   fullbleed: ["#FFFFFF", "#14161B", "#F2F0EB", "#D9DDE3", "#8F9BAE", "#2B2F36"]
 };
 const pageBg = (pi, page) => (page && page.bgColor) || (isCoverPage(pi) ? TH().coverBg : TH().bg);
+// colours that stand out on a page's own background colour (only kicks in when a page has one)
+function hexRGB(c){ const m = /^#?([0-9a-f]{6})$/i.exec(c || ""); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function lum(c){ const v = hexRGB(c); if (!v) return 1; const f = x => { x /= 255; return x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4; }; return .2126 * f(v[0]) + .7152 * f(v[1]) + .0722 * f(v[2]); }
+function contrast(a, b){ const A = lum(a), B = lum(b); return (Math.max(A, B) + .05) / (Math.min(A, B) + .05); }
+const plainInk = bg => lum(bg) > .18 ? "#1C1D21" : "#FFFFFF";
+function readable(bg, cands, min){ for (const c of cands) if (c && contrast(c, bg) >= min) return c; return plainInk(bg); }
+function pageInk(pi, page){
+  const th = TH(), cover = isCoverPage(pi);
+  const base = { ink: cover ? th.coverInk : th.ink, accent: cover ? th.coverInk : th.accent };
+  if (!page || !page.bgColor) return base;
+  const bg = page.bgColor;
+  const ink = readable(bg, [base.ink, cover ? th.ink : th.coverInk], 4.5);
+  return { ink, accent: readable(bg, [base.accent, cover ? th.accent : null, ink], 3), bg };
+}
+function frameColor(pi, page, si){
+  const th = TH(), f = th.frame, cover = isCoverPage(pi);
+  const base = cover && th.coverFrame ? th.coverFrame : f.colors ? f.colors[si % f.colors.length] : f.color;
+  // shadowed white "photo print" frames read on any colour; otherwise swap a frame that blends into the page
+  if (!page || !page.bgColor || f.shadow || contrast(base, page.bgColor) >= 1.5) return base;
+  const bg = page.bgColor, rot = f.colors ? f.colors.map((_, k) => f.colors[(si + k) % f.colors.length]) : [];
+  return readable(bg, [...rot, th.coverFrame, f.color, pageInk(pi, page).ink], 1.5);
+}
+const decoColor = (c, bg) => bg && contrast(c, bg) < 1.4 ? readable(bg, [TH().ink, TH().coverInk, TH().accent], 3) : c;
 const pageTheme = page => ({ ...TH(), ...(page && page.gap != null ? { gap: page.gap } : {}), ...(page && page.margin != null ? { margin: page.margin } : {}) });
 const layoutCount = page => geom(page.layout, D().size.w, D().size.h, TH()).slots.length;
 function pageGeom(page){
@@ -975,14 +998,14 @@ function renderPage(pi, ppi, mode){
   }
   const G = pageGeom(page);
   const rank = {}; paintOrder(page, G).forEach((it, i) => { rank[it.key] = 10 + i; });
-  if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H));
+  if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H, page && page.bgColor));
   G.slots.forEach((r, si) => {
     const slot = slotAt(page, si), s = document.createElement("div");
     s.className = "slot"; s.dataset.p = pi; s.dataset.s = si; s.style.zIndex = rank[slotKey(page, si)];
     let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
     if (th.frame && page.layout !== "full" && !fullCover(pi, page)) {
       inset = th.frame.width;
-      s.style.background = isCover && th.coverFrame ? th.coverFrame : th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
+      s.style.background = frameColor(pi, page, si);
       if (th.frame.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
     }
     Object.assign(s.style, { left: fx * ppi + "px", top: fy * ppi + "px", width: fw * ppi + "px", height: fh * ppi + "px" });
@@ -1095,7 +1118,7 @@ function renderPageColor(pi){
         style="position:relative; width:32px; height:32px; border-radius:8px; padding:0; background:${c}; border:${c === cur ? "3px solid var(--blue)" : "1px solid var(--line)"}">${c === def ? '<span style="position:absolute; right:-4px; top:-6px; font-size:9px; font-weight:800; background:var(--ink); color:#fff; border-radius:4px; padding:0 3px">T</span>' : ""}</button>`).join("")}
       <input type="color" id="pcPick" value="${/^#[0-9A-F]{6}$/.test(cur) ? cur : "#FFFFFF"}" aria-label="Pick any page colour" style="width:38px; height:32px; padding:0; border:1px solid var(--line); border-radius:8px; background:#FFFFFF">
     </div>
-    <p class="note" style="margin:6px 0 0">T = the theme’s colour for ${isCoverPage(pi) ? "covers" : "pages"}. Text colours don’t change, so check they still stand out.</p>
+    <p class="note" style="margin:6px 0 0">T = the theme’s colour for ${isCoverPage(pi) ? "covers" : "pages"}. With your own colour, text, frames and cover decorations that use theme colours switch to ones that stand out. Colours you picked yourself in Text stay as they are.</p>
     <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap"><button class="btn small" type="button" id="pcAll">Use on all inside pages</button><button class="btn small" type="button" id="pcReset">Reset</button></div>`;
   const set = c => { if (c.toUpperCase() === def) delete page.bgColor; else page.bgColor = c.toUpperCase(); };
   box.querySelectorAll("[data-pc]").forEach(b => b.onclick = () => { set(b.dataset.pc); changed(); });
@@ -1271,9 +1294,9 @@ function decoShapes(kind, W, H){
 }
 // a four-point sparkle
 const starPts = s => [[0, -1], [.22, -.22], [1, 0], [.22, .22], [0, 1], [-.22, .22], [-1, 0], [-.22, -.22]].map(([a, b]) => [s.x + a * s.r, s.y + b * s.r]);
-function decoSVG(kind, W, H){
+function decoSVG(kind, W, H, bg){
   return `<svg aria-hidden="true" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:2">${
-    decoShapes(kind, W, H).map(s => s.t === "line" ? `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.c}" stroke-width="${s.w}"/>`
+    decoShapes(kind, W, H).map(s => ({ ...s, c: decoColor(s.c, bg) })).map(s => s.t === "line" ? `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.c}" stroke-width="${s.w}"/>`
       : s.t === "rect" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.c}"/>`
       : s.t === "frame" ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${s.c}" stroke-width="${s.w2}"/>`
       : s.t === "star" ? `<path d="${starPts(s).map((q, i) => (i ? "L" : "M") + q[0] + " " + q[1]).join(" ")}Z" fill="${s.c}"/>`
@@ -1851,7 +1874,7 @@ async function drawPage(pi, o){
   ctx.fillStyle = pageBg(pi, page); ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
   if (hasBg(page)) await drawBgPhoto(ctx, page.bg, pageBg(pi, page), W, H, b, X, dpi);
   const G = pageGeom(page);
-  if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
+  if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi, page.bgColor);
   const drawSlot = async (si, r0) => {
     const slot = slotAt(page, si) || {};
     // frames that touch the trim edge run into the bleed
@@ -1865,7 +1888,7 @@ async function drawPage(pi, o){
       inset = th.frame.width;
       ctx.save();
       if (th.frame.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
-      ctx.fillStyle = isCover && th.coverFrame ? th.coverFrame : th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
+      ctx.fillStyle = frameColor(pi, page, si);
       ctx.fillRect(X(r.x), X(r.y), r.w * dpi, r.h * dpi);
       ctx.restore();
     }
@@ -1965,8 +1988,8 @@ function wrapLines(ctx, text, maxW){
   });
   return out;
 }
-function drawDeco(ctx, kind, W, H, X, dpi){
-  decoShapes(kind, W, H).forEach(s => {
+function drawDeco(ctx, kind, W, H, X, dpi, bg){
+  decoShapes(kind, W, H).map(s => ({ ...s, c: decoColor(s.c, bg) })).forEach(s => {
     ctx.save();
     if (s.t === "line") { ctx.strokeStyle = s.c; ctx.lineWidth = s.w * dpi; ctx.beginPath(); ctx.moveTo(X(s.x1), X(s.y1) - 1); ctx.lineTo(X(s.x2), X(s.y2)); ctx.stroke(); }
     else if (s.t === "rect") { ctx.fillStyle = s.c; ctx.fillRect(X(s.x), X(s.y), s.w * dpi, s.h * dpi); }
