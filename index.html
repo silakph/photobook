@@ -106,6 +106,7 @@ h1,h2{margin:0}
 .bgctl{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
 .sec-lbl{margin:0 0 8px; font-size:11px; font-weight:600; color:var(--soft); letter-spacing:.5px}
 .pg.bgdrop{outline:3px dashed var(--blue); outline-offset:-3px}
+.editing .pg.hasbg{cursor:grab} .editing .pg.bgmove{cursor:grabbing}
 .check p{margin:0 0 6px; display:flex; gap:8px; align-items:flex-start; font-size:13px}
 .check i{flex:none; width:8px; height:8px; margin-top:6px; border-radius:50%; background:var(--ok)}
 .check i.w{background:#C98A12}
@@ -683,6 +684,33 @@ function renderPage(pi, ppi, mode){
   el.style.background = isCover ? th.coverBg : th.bg;
   if (!page) { el.classList.add("blank"); return el; }
   el.dataset.pi = pi;
+  if (mode === "edit" && hasBg(page)) {
+    el.classList.add("hasbg");
+    el.addEventListener("pointerdown", e => {
+      if (e.button > 0 || e.target.closest(".slot") || e.target.closest(".tx")) return;
+      const bg = page.bg, ph = D().photos[bg.photo]; if (!ph) return;
+      e.preventDefault();
+      sel = { p: pi, s: -1 }; markSelected();
+      const start = { x: e.clientX, y: e.clientY, cx: bg.cx ?? .5, cy: bg.cy ?? .5, moved: false };
+      try { el.setPointerCapture(e.pointerId); } catch {}
+      el.classList.add("bgmove");
+      const move = ev => {
+        const m = (bg.blur || 0) * BG_MAX_BLUR * 2, w = (W + 2 * m) * ppi, h = (H + 2 * m) * ppi;
+        const c = crop(ph, w, h, bg);
+        bg.cx = start.cx - (ev.clientX - start.x) / c.s / ph.w; bg.cy = start.cy - (ev.clientY - start.y) / c.s / ph.h;
+        const cc = crop(ph, w, h, bg); bg.cx = (cc.sx + cc.sw / 2) / ph.w; bg.cy = (cc.sy + cc.sh / 2) / ph.h;
+        if (Math.abs(ev.clientX - start.x) + Math.abs(ev.clientY - start.y) > 3) start.moved = true;
+        refreshBg(pi);
+      };
+      const up = () => {
+        el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
+        el.classList.remove("bgmove");
+        if (start.moved) { queueSave(); renderSpreadList(); }
+        renderPanels();
+      };
+      el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    });
+  }
   if (mode === "edit") el.addEventListener("click", e => {
     if (e.target.closest(".slot") || e.target.closest(".tx")) return;
     sel = { p: pi, s: -1 }; markSelected(); renderPanels();
@@ -772,7 +800,12 @@ function setBg(pi, id){
 function refreshBg(pi){
   const pg = D().pages[pi], el = document.querySelector(`#spread .pg[data-pi="${pi}"]`); if (!el || !hasBg(pg)) return;
   const th = TH(), fresh = bgLayer(pg, isCoverPage(pi) ? th.coverBg : th.bg, D().size.w, D().size.h, stagePPI());
-  const old = el.querySelector(".bgph"); if (old) old.replaceWith(fresh); else el.prepend(fresh);
+  const old = el.querySelector(".bgph");
+  if (!old) { el.prepend(fresh); return; }
+  const img = old.querySelector("img"), fimg = fresh.querySelector("img");
+  if (img && fimg) { const src = img.src; img.style.cssText = fimg.style.cssText; if (src) img.src = src; }
+  old.querySelectorAll("div").forEach(x => x.remove());
+  fresh.querySelectorAll("div").forEach(x => old.appendChild(x));
 }
 let pickBg = null;
 function renderBgCtl(pi){
@@ -794,14 +827,23 @@ function renderBgCtl(pi){
   box.innerHTML = `<p class="sec-lbl">BACKGROUND PHOTO</p>
     <div style="display:flex; gap:10px; align-items:center"><img id="bgThumb" alt="" style="width:56px; height:56px; object-fit:cover; border-radius:6px; background:var(--bg)"><span style="font-size:12.5px; color:var(--soft)">Behind everything on ${where}.</span></div>
     <label class="f" for="bgBlur">Blur</label><input id="bgBlur" type="range" min="0" max="1" step="0.01" value="${bg.blur || 0}" style="width:100%">
+    <label class="f" for="bgZoom">Zoom <span style="font-weight:500; color:var(--soft)">(drag an empty part of the page to move it)</span></label><input id="bgZoom" type="range" min="1" max="3" step="0.01" value="${bg.zoom || 1}" style="width:100%">
     <label class="f" for="bgFade">Soften <span style="font-weight:500; color:var(--soft)">(fade into the page colour)</span></label><input id="bgFade" type="range" min="0" max="0.85" step="0.01" value="${bg.fade || 0}" style="width:100%">
-    <div style="display:flex; gap:8px; margin-top:12px"><button class="btn small" type="button" id="bgChange">Change photo</button><button class="btn small" type="button" id="bgRemove">Remove</button></div>`;
+    <div style="display:flex; gap:8px; margin-top:12px"><button class="btn small" type="button" id="bgChange">Change photo</button><button class="btn small" type="button" id="bgFit">Fit</button><button class="btn small" type="button" id="bgRemove">Remove</button></div>`;
   photoThumbURL(bg.photo).then(u => { if (u && $("bgThumb")) $("bgThumb").src = u; });
   $("bgBlur").oninput = e => { bg.blur = +e.target.value; refreshBg(pi); queueSave(); };
   $("bgFade").oninput = e => { bg.fade = +e.target.value; refreshBg(pi); queueSave(); };
   $("bgBlur").onchange = $("bgFade").onchange = () => renderSpreadList();
   $("bgChange").onclick = () => { pickBg = pi; showTab("photos"); say("upMsg", `Tap a photo to use it as the background of ${where}.`); };
   $("bgRemove").onclick = () => { delete page.bg; changed(); };
+  $("bgZoom").oninput = e => {
+    bg.zoom = +e.target.value;
+    const ph = D().photos[bg.photo], m = (bg.blur || 0) * BG_MAX_BLUR * 2, c = crop(ph, D().size.w + 2 * m, D().size.h + 2 * m, bg);
+    bg.cx = (c.sx + c.sw / 2) / ph.w; bg.cy = (c.sy + c.sh / 2) / ph.h;
+    refreshBg(pi); queueSave();
+  };
+  $("bgZoom").onchange = () => renderSpreadList();
+  $("bgFit").onclick = () => { bg.zoom = 1; bg.cx = .5; bg.cy = .5; changed(); };
 }
 function placeImg(img, ph, w, h, slot){
   const c = crop(ph, w, h, slot);
@@ -934,7 +976,12 @@ function putPhoto(pi, si, id){
 function renderCtx(){
   const box = $("ctx");
   const slot = sel && sel.s >= 0 && D().pages[sel.p] && D().pages[sel.p].slots[sel.s];
-  if (!slot) { box.innerHTML = `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`; return; }
+  if (!slot) {
+    const pg = sel && D().pages[sel.p];
+    box.innerHTML = hasBg(pg) ? `<span class="hint">Drag an empty part of the page to move the background photo. Zoom and blur are in <b>Layouts</b>.</span>`
+      : `<span class="hint">Click a frame to place or adjust a photo. Click text to type.</span>`;
+    return;
+  }
   if (!slot.photo) { box.innerHTML = `<span class="hint">Frame selected: tap a photo in <b>Photos</b>, or drag one here.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>`;
     $("cxPhotos").onclick = () => showTab("photos"); return; }
   box.innerHTML = `<span class="hint">Drag the photo to move it. Zoom in for more room to move.</span>
