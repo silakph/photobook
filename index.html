@@ -109,6 +109,18 @@ h1,h2{margin:0}
 .photo-grid button{position:relative; aspect-ratio:1; padding:0; border:0; border-radius:6px; overflow:hidden; background:var(--bg)}
 .photo-grid img{width:100%; height:100%; object-fit:cover; display:block; pointer-events:none}
 .photo-grid .used{position:absolute; right:4px; bottom:4px; padding:0 6px; border-radius:999px; background:rgba(0,0,0,.6); color:#FFFFFF; font-size:10.5px; font-weight:700}
+.photo-grid .pt{position:relative}
+.photo-grid .pt > button:first-child{display:block; width:100%}
+.photo-grid .pdel{position:absolute; top:4px; right:4px; aspect-ratio:auto; width:24px; height:24px; border-radius:12px; padding:0; background:rgba(0,0,0,.62); color:#FFFFFF; font-size:16px; font-weight:700; line-height:1; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s}
+.photo-grid .pt:hover .pdel, .photo-grid .pdel:focus-visible{opacity:1}
+@media (hover:none){ .photo-grid .pdel{opacity:1} }
+.photo-grid .pt.armed .pdel{opacity:1; top:auto; left:4px; right:4px; bottom:4px; width:auto; height:auto; min-height:24px; padding:4px 6px; border-radius:7px; background:#C62828; font-size:11px; line-height:1.2; text-align:center; z-index:2}
+.phbulk{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid var(--line)}
+.el-row .btn.small{padding:0 9px}
+.bdsw{width:28px; height:28px; border-radius:7px; padding:0; border:1px solid var(--line)}
+.bdsw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--blue)}
+.chk{display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; margin:8px 0}
+.chk input{width:17px; height:17px; accent-color:var(--blue)}
 .photo-grid .lowres{position:absolute; left:4px; top:4px; width:10px; height:10px; border-radius:50%; background:#C98A12; border:2px solid #FFFFFF}
 .upl{display:flex; flex-direction:column; gap:6px}
 .auopts{display:flex; gap:8px; flex-wrap:wrap}
@@ -320,10 +332,13 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
           <p class="msg" id="upMsg" role="status" style="margin:0"></p>
         </div>
         <div class="photo-grid" id="photoGrid"></div>
+        <div class="phbulk" id="phBulk"></div>
       </div>
       <div class="panel" id="p-layouts">
         <p class="note" id="layoutNote"></p>
         <div class="layouts" id="layoutGrid"></div>
+        <div class="bgctl" id="frameCtl"></div>
+        <div class="bgctl" id="borderCtl"></div>
         <div class="bgctl" id="spaceCtl"></div>
         <div class="check" id="check"></div>
       </div>
@@ -672,6 +687,15 @@ function pageInk(pi, page){
   const ink = readable(bg, [base.ink, cover ? th.ink : th.coverInk], 4.5);
   return { ink, accent: readable(bg, [base.accent, cover ? th.accent : null, ink], 3), bg };
 }
+// a frame's border: the theme's, or this page's own settings (on/off, thickness, colour, corners, shadow)
+function frameStyle(pi, page, si, r){
+  const th = TH(), f = th.frame, b = (page && page.border) || {};
+  if ((r && r.bare) || page.layout === "full" || fullCover(pi, page)) return { inset: 0, color: null, shadow: false, radius: 0 }; // photos to the edge
+  const on = b.on ?? !!f;
+  const inset = on ? (b.w ?? (f ? f.width : .06)) : 0;
+  const color = b.color || (f ? frameColor(pi, page, si) : pageInk(pi, page).ink);
+  return { inset, color, shadow: b.shadow ?? !!(f && f.shadow), radius: b.radius || 0 };
+}
 function frameColor(pi, page, si){
   const th = TH(), f = th.frame, cover = isCoverPage(pi);
   const base = cover && th.coverFrame ? th.coverFrame : f.colors ? f.colors[si % f.colors.length] : f.color;
@@ -687,6 +711,7 @@ function pageGeom(page){
   const d = D(), G = geom(page.layout, d.size.w, d.size.h, pageTheme(page));
   G.n = G.slots.length;
   if (page.slotPos) G.slots = G.slots.map((r, i) => page.slotPos[i] ? { ...r, ...page.slotPos[i] } : r);
+  if (page.hidden) { G.slots.forEach((r, i) => { if (page.hidden["s" + i]) r.hidden = true; }); G.texts = G.texts.filter(t => !page.hidden["t:" + t.role]); }
   (page.extraSlots || []).forEach(e => G.slots.push({ ...e.rect }));
   if (page.textPos) G.texts = G.texts.map(t => page.textPos[t.role] ? { ...t, rect: { ...page.textPos[t.role] } } : t);
   (page.extraTexts || []).forEach(e => { if (page.textPos && page.textPos[e.key]) G.texts.push({ role: e.key, rect: { ...page.textPos[e.key] }, size: e.size, align: e.align }); });
@@ -713,7 +738,7 @@ const isExtraSlot = (page, si) => si >= layoutCount(page);
 function slotKey(page, si){ const n = layoutCount(page); return si < n ? "s" + si : "e" + (((page.extraSlots || [])[si - n] || {}).id || si); }
 function paintOrder(page, G){
   const z = page.z || {};
-  const items = [...G.slots.map((r, si) => ({ kind: "s", si, key: slotKey(page, si), dz: si })), ...G.texts.map((t, i) => ({ kind: "t", t, key: "t:" + t.role, dz: 1000 + i }))];
+  const items = [...G.slots.map((r, si) => ({ kind: "s", si, key: slotKey(page, si), dz: si, hidden: r.hidden })).filter(x => !x.hidden), ...G.texts.map((t, i) => ({ kind: "t", t, key: "t:" + t.role, dz: 1000 + i }))];
   items.forEach(it => { it.z = z[it.key] ?? it.dz; });
   return items.sort((a, b) => (a.z - b.z) || (a.dz - b.dz));
 }
@@ -743,7 +768,7 @@ function duplicateText(pi, role){
 function snapRect(page, r, kind, selfKey, ppi){
   const W = D().size.w, H = D().size.h, m = pageTheme(page).margin, G = pageGeom(page);
   const xs = [0, W / 2, W, m, W - m], ys = [0, H / 2, H, m, H - m];
-  G.slots.forEach((q, si) => { if (slotKey(page, si) === selfKey) return; xs.push(q.x, q.x + q.w / 2, q.x + q.w); ys.push(q.y, q.y + q.h / 2, q.y + q.h); });
+  G.slots.forEach((q, si) => { if (q.hidden || slotKey(page, si) === selfKey) return; xs.push(q.x, q.x + q.w / 2, q.x + q.w); ys.push(q.y, q.y + q.h / 2, q.y + q.h); });
   G.texts.forEach(t => { if ("t:" + t.role === selfKey) return; const q = t.rect; xs.push(q.x, q.x + q.w / 2, q.x + q.w); ys.push(q.y, q.y + q.h / 2, q.y + q.h); });
   const thr = 7 / ppi, out = { ...r }, gx = [], gy = [];
   const best = (cands, targets) => { let bd = null; cands.forEach(c => targets.forEach(tv => { const d = tv - c; if (Math.abs(d) <= thr && (!bd || Math.abs(d) < Math.abs(bd.d))) bd = { d, t: tv }; })); return bd; };
@@ -1092,14 +1117,14 @@ function renderPage(pi, ppi, mode){
   G.slots.forEach((r, si) => {
     const slot = slotAt(page, si), s = document.createElement("div");
     s.className = "slot"; s.dataset.p = pi; s.dataset.s = si; s.style.zIndex = rank[slotKey(page, si)];
-    let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
-    if (th.frame && page.layout !== "full" && !fullCover(pi, page) && !r.bare) {
-      inset = th.frame.width;
-      s.style.background = frameColor(pi, page, si);
-      if (th.frame.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
-    }
+    if (r.hidden) return;
+    let fx = r.x, fy = r.y, fw = r.w, fh = r.h;
+    const fs = frameStyle(pi, page, si, r), inset = fs.inset;
+    if (inset) s.style.background = fs.color;
+    if (fs.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
+    if (fs.radius) s.style.borderRadius = fs.radius * ppi + "px";
     Object.assign(s.style, { left: fx * ppi + "px", top: fy * ppi + "px", width: fw * ppi + "px", height: fh * ppi + "px" });
-    const inner = document.createElement("div"); inner.style.cssText = `position:absolute; inset:${inset * ppi}px; overflow:hidden`;
+    const inner = document.createElement("div"); inner.style.cssText = `position:absolute; inset:${inset * ppi}px; overflow:hidden; border-radius:${Math.max(0, fs.radius - inset) * ppi}px`;
     s.appendChild(inner);
     const ph = slot.photo && d.photos[slot.photo];
     if (ph) {
@@ -1223,6 +1248,55 @@ function renderPageColor(pi){
   $("pcReset").onclick = () => { delete page.bgColor; changed(); };
 }
 // space between photos and page margin, per page
+function renderFrameTools(pi){
+  const page = D().pages[pi], box = $("frameCtl"); if (!page) { box.innerHTML = ""; return; }
+  const hid = Object.keys(page.hidden || {}).length, selFrame = sel && sel.p === pi && sel.s >= 0;
+  box.innerHTML = `<p class="sec-lbl">FRAMES</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap"><button class="btn small" type="button" id="frAdd">+ Add a frame</button>
+    <button class="btn small" type="button" id="frDel" ${selFrame ? "" : "disabled"}>Remove selected frame</button>
+    ${hid ? `<button class="btn small" type="button" id="frBack">Bring back removed (${hid})</button>` : ""}</div>
+    <p class="note" style="margin-top:6px">${selFrame ? "Or press Delete. Duplicate is in the bar above the page." : "Tap a frame on the page to remove or duplicate it. More grids are in Elements."}</p>`;
+  $("frAdd").onclick = () => { const first = addFrames(page, 1, 1); sel = { p: pi, s: first }; changed(); };
+  $("frDel").onclick = () => { if (sel && sel.s >= 0) deleteItem(pi, { s: sel.s }); };
+  if ($("frBack")) $("frBack").onclick = () => { delete page.hidden; changed(); };
+}
+function renderBorders(pi){
+  const page = D().pages[pi], box = $("borderCtl"); if (!page) { box.innerHTML = ""; return; }
+  const th = TH(), f = th.frame, b = page.border || {};
+  const on = b.on ?? !!f, w = b.w ?? (f ? f.width : .06), rad = b.radius || 0, sh = b.shadow ?? !!(f && f.shadow);
+  const themeCols = f ? (f.colors || [f.color]) : [];
+  const cur = (b.color || "").toUpperCase();
+  const sw = [...new Set([...themeCols, th.coverFrame, "#FFFFFF", pageInk(pi, page).ink, th.accent, ...(PALETTES[D().theme] || [])].filter(Boolean).map(c => c.toUpperCase()))].slice(0, 9);
+  const themeSw = themeCols.length ? `linear-gradient(135deg, ${themeCols.map((c, i) => `${c} ${i / themeCols.length * 100}% ${(i + 1) / themeCols.length * 100}%`).join(", ")})` : pageInk(pi, page).ink;
+  box.innerHTML = `<p class="sec-lbl">PHOTO BORDERS</p>
+    <label class="chk"><input type="checkbox" id="bdOn" ${on ? "checked" : ""}>Borders around photos</label>
+    <div ${on ? "" : 'style="opacity:.45; pointer-events:none"'}>
+    <label class="f" for="bdW" style="margin-top:4px">Thickness <span style="font-weight:500; color:var(--soft)" id="bdWV">${w.toFixed(2)} in</span></label>
+    <input id="bdW" type="range" min="0.01" max="0.4" step="0.01" value="${w}" style="width:100%">
+    <label class="f">Colour</label>
+    <div style="display:flex; flex-wrap:wrap; gap:7px; align-items:center">
+      <button type="button" class="bdsw" data-bc="" aria-pressed="${!cur}" aria-label="Theme colour" title="Theme colour" style="background:${themeSw}"></button>
+      ${sw.map(c => `<button type="button" class="bdsw" data-bc="${c}" aria-pressed="${c === cur}" aria-label="Border colour ${c}" style="background:${c}"></button>`).join("")}
+      <input type="color" id="bdPick" value="${/^#[0-9A-F]{6}$/.test(cur) ? cur : "#FFFFFF"}" aria-label="Pick any border colour" style="width:36px; height:28px; padding:0; border:1px solid var(--line); border-radius:7px; background:#FFFFFF">
+    </div></div>
+    <label class="f" for="bdR">Rounded corners <span style="font-weight:500; color:var(--soft)" id="bdRV">${rad ? rad.toFixed(2) + " in" : "square"}</span></label>
+    <input id="bdR" type="range" min="0" max="1" step="0.02" value="${rad}" style="width:100%">
+    <label class="chk"><input type="checkbox" id="bdSh" ${sh ? "checked" : ""}>Soft shadow under photos</label>
+    <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap"><button class="btn small" type="button" id="bdAll">Use on every page</button><button class="btn small" type="button" id="bdReset">Reset to theme</button></div>
+    <p class="note" style="margin-top:6px">Photos that run to the page edge never get a border.</p>`;
+  const B = () => (page.border = page.border || {});
+  const live = () => { queueSave(); renderStage(); };
+  $("bdOn").onchange = e => { const v = e.target.checked; if (v === !!f) delete B().on; else B().on = v; changed(); };
+  $("bdW").oninput = e => { B().w = +e.target.value; $("bdWV").textContent = (+e.target.value).toFixed(2) + " in"; live(); };
+  $("bdR").oninput = e => { const v = +e.target.value; if (v) B().radius = v; else delete B().radius; $("bdRV").textContent = v ? v.toFixed(2) + " in" : "square"; live(); };
+  $("bdW").onchange = $("bdR").onchange = () => { renderSpreadList(); renderCheck(); };
+  box.querySelectorAll("[data-bc]").forEach(x => x.onclick = () => { if (x.dataset.bc) B().color = x.dataset.bc; else delete B().color; changed(); });
+  $("bdPick").oninput = e => { B().color = e.target.value.toUpperCase(); live(); };
+  $("bdPick").onchange = () => changed();
+  $("bdSh").onchange = e => { if (e.target.checked === !!(f && f.shadow)) delete B().shadow; else B().shadow = e.target.checked; changed(); };
+  $("bdAll").onclick = () => { D().pages.forEach(pg => { if (page.border) pg.border = { ...page.border }; else delete pg.border; }); changed(); };
+  $("bdReset").onclick = () => { delete page.border; changed(); };
+}
 function renderSpacing(pi){
   const page = D().pages[pi], box = $("spaceCtl"); if (!page) { box.innerHTML = ""; return; }
   const th = TH(), gap = page.gap ?? th.gap, mar = page.margin ?? th.margin;
@@ -1261,6 +1335,20 @@ function addTextBox(page, kind){
   page.texts[key] = "";
   return key;
 }
+// delete any frame or text box: added ones go for good, layout ones are hidden (picking the layout again brings them back)
+function deleteItem(pi, it){
+  const page = D().pages[pi]; if (!page) return;
+  sel = null;
+  if (it.s != null) {
+    if (isExtraSlot(page, it.s)) return deleteExtraSlot(page, it.s);
+    page.hidden = page.hidden || {}; page.hidden[slotKey(page, it.s)] = true;
+    setSlotPhoto(page, it.s, { photo: null, cx: .5, cy: .5, zoom: 1 });
+  } else {
+    if ((page.extraTexts || []).some(e => e.key === it.t)) return deleteExtraText(page, it.t);
+    page.hidden = page.hidden || {}; page.hidden["t:" + it.t] = true;
+  }
+  changed();
+}
 function deleteExtraSlot(page, si){
   const j = si - layoutCount(page); if (!page.extraSlots || !page.extraSlots[j]) return;
   page.extraSlots.splice(j, 1); if (!page.extraSlots.length) delete page.extraSlots; sel = null; changed();
@@ -1283,13 +1371,21 @@ function renderElements(pi){
     const key = addTextBox(page, b.dataset.t); sel = { p: pi, s: -1 }; changed();
     setTimeout(() => { const el = document.querySelector(`#spread .pg[data-pi="${pi}"] .tx[data-role="${key}"] > div`); if (el) el.focus(); }, 50);
   });
-  const n = layoutCount(page), rows = [];
-  (page.extraSlots || []).forEach((e, j) => rows.push(`<div class="el-row"><span>Photo frame ${j + 1}${e.photo ? "" : " <span style='color:var(--soft)'>(empty)</span>"}</span><button class="btn small" type="button" data-sel="${n + j}">Select</button><button class="btn small" type="button" data-dels="${n + j}" aria-label="Delete photo frame ${j + 1}">×</button></div>`));
-  (page.extraTexts || []).forEach((e, j) => rows.push(`<div class="el-row"><span>${e.kind === "heading" ? "Heading" : "Text"}: ${esc(((page.texts[e.key] || "").trim() || "empty").slice(0, 24))}</span><button class="btn small" type="button" data-delt="${e.key}" aria-label="Delete text box ${j + 1}">×</button></div>`));
-  $("elList").innerHTML = rows.length ? rows.join("") : '<p class="note">Nothing added yet. Frames and text from the layout can be moved and resized too.</p>';
-  $("elList").querySelectorAll("[data-sel]").forEach(b => b.onclick = () => { sel = { p: pi, s: +b.dataset.sel }; markSelected(); });
-  $("elList").querySelectorAll("[data-dels]").forEach(b => b.onclick = () => deleteExtraSlot(page, +b.dataset.dels));
-  $("elList").querySelectorAll("[data-delt]").forEach(b => b.onclick = () => deleteExtraText(page, b.dataset.delt));
+  const G = pageGeom(page), n = layoutCount(page), rows = [];
+  const acts = (attr, label) => `<button class="btn small" type="button" data-sel${attr}>Select</button><button class="btn small" type="button" data-dup${attr} aria-label="Duplicate ${label}" title="Duplicate">Duplicate</button><button class="btn small" type="button" data-del${attr} aria-label="Delete ${label}" title="Delete">×</button>`;
+  let fno = 0;
+  G.slots.forEach((r, si) => { if (r.hidden) return; fno++; const sd = slotAt(page, si) || {};
+    rows.push(`<div class="el-row"><span>Photo frame ${fno}${si >= n ? " · added" : ""}${sd.photo ? "" : " <span style='color:var(--soft)'>(empty)</span>"}</span>${acts(`="s${si}"`, "photo frame " + fno)}</div>`); });
+  const RN = { title: "Title", caption: "Caption", body: "Text" };
+  G.texts.forEach(t => { const ex = (page.extraTexts || []).find(e => e.key === t.role), nm = RN[t.role] || (ex && ex.kind === "heading" ? "Heading" : "Text");
+    rows.push(`<div class="el-row"><span>${nm}: ${esc(((page.texts[t.role] || "").trim() || "empty").slice(0, 22))}</span>${acts(`="t${t.role}"`, nm)}</div>`); });
+  const hid = Object.keys(page.hidden || {}).length;
+  $("elList").innerHTML = (rows.length ? rows.join("") : '<p class="note">Nothing on this page yet.</p>') + (hid ? `<button class="btn small" type="button" id="elBack" style="margin-top:8px">Bring back removed layout items (${hid})</button>` : "");
+  const it = v => v[0] === "s" ? { s: +v.slice(1) } : { t: v.slice(1) };
+  $("elList").querySelectorAll("[data-sel]").forEach(b => b.onclick = () => { const x = it(b.dataset.sel); sel = x.s != null ? { p: pi, s: x.s } : { p: pi, s: -1, t: x.t }; markSelected(); renderCtx(); });
+  $("elList").querySelectorAll("[data-dup]").forEach(b => b.onclick = () => { const x = it(b.dataset.dup); if (x.s != null) duplicateSlot(pi, x.s); else duplicateText(pi, x.t); });
+  $("elList").querySelectorAll("[data-del]").forEach(b => b.onclick = () => deleteItem(pi, it(b.dataset.del)));
+  if ($("elBack")) $("elBack").onclick = () => { delete page.hidden; changed(); };
 }
 // ---- page background photo (blur + soften) ----
 const BG_MAX_BLUR = .4; // inches of blur at the slider's maximum
@@ -1483,8 +1579,8 @@ function putPhoto(pi, si, id){
   setSlotPhoto(page, si, { photo: id, cx: .5, cy: .5, zoom: 1 });
   // select the next empty frame on this spread, so tapping photos fills a page quickly
   const sp = spreads()[spreadIdx]; let next = null;
-  for (const p of [pi, ...sp.filter(x => x !== pi)]) { if (p === null) continue; const pg = D().pages[p], n = pageGeom(pg).slots.length; // same page first
-    for (let k = 0; k < n; k++) { const sd = slotAt(pg, k); if (sd && !sd.photo) { next = { p, s: k }; break; } } if (next) break; }
+  for (const p of [pi, ...sp.filter(x => x !== pi)]) { if (p === null) continue; const pg = D().pages[p], PG = pageGeom(pg), n = PG.slots.length; // same page first
+    for (let k = 0; k < n; k++) { const sd = slotAt(pg, k); if (!PG.slots[k].hidden && sd && !sd.photo) { next = { p, s: k }; break; } } if (next) break; }
   sel = next || { p: pi, s: si };
   changed();
 }
@@ -1504,10 +1600,10 @@ function renderCtx(){
   const slot = sel && sel.s >= 0 && D().pages[sel.p] && slotAt(D().pages[sel.p], sel.s);
   if (!slot && sel && sel.t && D().pages[sel.p] && pageGeom(D().pages[sel.p]).texts.some(t => t.role === sel.t)) {
     const page = D().pages[sel.p], role = sel.t, extra = (page.extraTexts || []).some(e => e.key === role);
-    box.innerHTML = `<span class="hint">Text box: drag its blue handles, or use the arrow keys (Shift for bigger steps).</span><button class="btn small" type="button" id="cxStyle">Font &amp; size</button>${arrangeBar()}${extra ? '<button class="btn small" type="button" id="cxDelText">Delete</button>' : ""}`;
+    box.innerHTML = `<span class="hint">Text box: drag its blue handles, or use the arrow keys (Shift for bigger steps).</span><button class="btn small" type="button" id="cxStyle">Font &amp; size</button>${arrangeBar()}<button class="btn small" type="button" id="cxDelText">Delete</button>`;
     wireArrange(page, "t:" + role, () => duplicateText(sel.p, role));
     $("cxStyle").onclick = () => { lastTextFocus = null; showTab("text"); };
-    if ($("cxDelText")) $("cxDelText").onclick = () => { sel = null; deleteExtraText(page, role); };
+    const piT = sel.p; $("cxDelText").onclick = () => deleteItem(piT, { t: role });
     return;
   }
   if (!slot) {
@@ -1517,16 +1613,16 @@ function renderCtx(){
     return;
   }
   const pageS = D().pages[sel.p], keyS = slotKey(pageS, sel.s), siS = sel.s, piS = sel.p;
-  const delBtn = isExtraSlot(pageS, sel.s) ? '<button class="btn small" type="button" id="cxDelFrame">Delete frame</button>' : "";
+  const delBtn = '<button class="btn small" type="button" id="cxDelFrame">Delete frame</button>';
   if (!slot.photo) { box.innerHTML = `<span class="hint">Empty frame: tap a photo in <b>Photos</b> or drag one here.</span><button class="btn small" type="button" id="cxPhotos">Show photos</button>${arrangeBar()}${delBtn}`;
-    if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteExtraSlot(pageS, siS);
+    if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteItem(piS, { s: siS });
     wireArrange(pageS, keyS, () => duplicateSlot(piS, siS));
     $("cxPhotos").onclick = () => showTab("photos"); return; }
   box.innerHTML = `<span class="hint">Drag the photo to move it. Zoom in for more room to move.</span>
     <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600">Zoom <input type="range" id="cxZoom" min="1" max="3" step="0.01" value="${slot.zoom || 1}"></label>
     <button class="btn small" type="button" id="cxFit">Fit</button><button class="btn small" type="button" id="cxReplace">Replace</button><button class="btn small" type="button" id="cxRemove">Remove photo</button>${arrangeBar()}${delBtn}`;
   wireArrange(pageS, keyS, () => duplicateSlot(piS, siS));
-  if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteExtraSlot(pageS, siS);
+  if ($("cxDelFrame")) $("cxDelFrame").onclick = () => deleteItem(piS, { s: siS });
   $("cxZoom").oninput = e => {
     slot.zoom = +e.target.value;
     const s = document.querySelector(`#spread .slot[data-p="${sel.p}"][data-s="${sel.s}"]`), img = s && s.querySelector("img"), inner = img && img.parentElement;
@@ -1618,6 +1714,8 @@ document.addEventListener("keydown", e => {
   if (mod && !typing && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && !typing && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
   if (typing || !sel) return;
+  if ((e.key === "Delete" || e.key === "Backspace") && (sel.s >= 0 || sel.t)) { e.preventDefault(); deleteItem(sel.p, sel.s >= 0 ? { s: sel.s } : { t: sel.t }); return; }
+  if (mod && e.key.toLowerCase() === "d" && (sel.s >= 0 || sel.t)) { e.preventDefault(); if (sel.s >= 0) duplicateSlot(sel.p, sel.s); else duplicateText(sel.p, sel.t); return; }
   if (e.key === "Escape") { sel = null; markSelected(); renderPanels(); return; }
   const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   if (!dir) return;
@@ -1650,10 +1748,12 @@ function renderPanels(){
       G.slots.forEach(r => b.insertAdjacentHTML("beforeend", `<i style="left:${r.x / W * 100}%; top:${r.y / H * 100}%; width:${r.w / W * 100}%; height:${r.h / H * 100}%"></i>`));
       G.texts.filter(t => t.rot).forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + t.rect.w * .35) / W * 100}%; top:${(t.rect.y + t.rect.h * .2) / H * 100}%; width:${t.rect.w * .3 / W * 100}%; height:${t.rect.h * .6 / H * 100}%"></i>`));
       G.texts.filter(t => !t.rot).forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
-      b.addEventListener("click", () => { page.layout = key; delete page.slotPos; if (page.z) Object.keys(page.z).forEach(k => { if (/^s\d/.test(k)) delete page.z[k]; }); if (page.textPos) Object.keys(page.textPos).forEach(k => { if (!/^x/.test(k)) delete page.textPos[k]; }); sel = null; changed(); });
+      b.addEventListener("click", () => { page.layout = key; delete page.slotPos; delete page.hidden; if (page.z) Object.keys(page.z).forEach(k => { if (/^s\d/.test(k)) delete page.z[k]; }); if (page.textPos) Object.keys(page.textPos).forEach(k => { if (!/^x/.test(k)) delete page.textPos[k]; }); sel = null; changed(); });
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
+    renderFrameTools(pi);
+    renderBorders(pi);
     renderSpacing(pi);
     renderCheck();
   }
@@ -1996,7 +2096,7 @@ $("auGo").addEventListener("click", async () => {
   for (let pi = 1; pi < p.length && queue.length; pi++) {
     if (isCoverPage(pi)) continue;
     const page = p[pi], G = pageGeom(page), empty = [];
-    G.slots.forEach((r, si) => { const sd = slotAt(page, si); if (sd && !sd.photo) empty.push(si); });
+    G.slots.forEach((r, si) => { const sd = slotAt(page, si); if (!r.hidden && sd && !sd.photo) empty.push(si); });
     if (!empty.length) continue;
     const take = queue.splice(0, empty.length);
     pairUp(empty.map(si => G.slots[si]), take).forEach(([fi, id]) => setSlotPhoto(page, empty[fi], { photo: id, cx: .5, cy: .5, zoom: 1 }));
@@ -2025,6 +2125,32 @@ $("auGo").addEventListener("click", async () => {
     : "There were no empty frames. Choose “Empty frames, then new pages” to add pages.", !placed);
 });
 
+// remove photos for good: from the book, every frame and background, the undo history and storage
+function scrubPhotos(data, gone){
+  gone.forEach(id => { delete data.photos[id]; });
+  (data.pages || []).forEach(pg => {
+    [...(pg.slots || []), ...(pg.extraSlots || [])].forEach(sl => { if (sl && gone.has(sl.photo)) Object.assign(sl, { photo: null, cx: .5, cy: .5, zoom: 1 }); });
+    if (pg.bg && gone.has(pg.bg.photo)) delete pg.bg;
+  });
+  return data;
+}
+async function deletePhotos(ids){
+  const gone = new Set(ids.filter(id => D().photos[id])); if (!gone.size) return;
+  const paths = [...gone].flatMap(id => [D().photos[id].orig, D().photos[id].thumb]);
+  commitSnap();
+  scrubPhotos(D(), gone);
+  const fix = j => JSON.stringify(scrubPhotos(JSON.parse(j), gone));
+  for (let i = 0; i < UNDO.length; i++) UNDO[i] = fix(UNDO[i]);
+  for (let i = 0; i < REDO.length; i++) REDO[i] = fix(REDO[i]);
+  lastSnap = snapOf();
+  gone.forEach(id => { const u = thumbURL.get(id); thumbURL.delete(id); if (u) u.then(x => { if (x) URL.revokeObjectURL(x); }); });
+  if (sel && sel.s >= 0) sel = null;
+  changed();
+  say("upMsg", `Deleted ${gone.size} photo${gone.size === 1 ? "" : "s"}.`);
+  try { await flushSave(); const { error } = await sb.storage.from(BUCKET).remove(paths); if (error) throw error; }
+  catch (e) { console.warn("couldn't remove photo files", e); }
+}
+
 function photoUses(){
   const n = {};
   D().pages.forEach(p => { const k = pageGeom(p).slots.length; for (let i = 0; i < k; i++) { const s = slotAt(p, i); if (s && s.photo) n[s.photo] = (n[s.photo] || 0) + 1; } if (hasBg(p)) n[p.bg.photo] = (n[p.bg.photo] || 0) + 1; });
@@ -2032,7 +2158,7 @@ function photoUses(){
 }
 function renderPhotos(){
   const uses = photoUses(), ids = Object.keys(D().photos);
-  if (!ids.length) { $("photoGrid").innerHTML = '<p class="note" style="grid-column:1/-1">No photos yet.</p>'; return; }
+  if (!ids.length) { $("photoGrid").innerHTML = '<p class="note" style="grid-column:1/-1">No photos yet.</p>'; $("phBulk").innerHTML = ""; return; }
   $("photoGrid").replaceChildren(...ids.map(id => {
     const ph = D().photos[id];
     const b = document.createElement("button"); b.type = "button"; b.draggable = true; b.setAttribute("aria-label", `Photo ${ph.name}${uses[id] ? `, used ${uses[id]} time${uses[id] > 1 ? "s" : ""}` : ""}`);
@@ -2046,8 +2172,24 @@ function renderPhotos(){
       if (!sel || sel.s < 0) { say("upMsg", "Select a frame on the page first, then tap a photo. For a page background, use the Background tab."); return; }
       putPhoto(sel.p, sel.s, id);
     });
-    return b;
+    const tile = document.createElement("div"); tile.className = "pt"; tile.appendChild(b);
+    const x = document.createElement("button"); x.type = "button"; x.className = "pdel"; x.textContent = "×"; x.setAttribute("aria-label", `Delete photo ${ph.name}`);
+    x.addEventListener("click", e => {
+      e.stopPropagation();
+      if (x.dataset.armed !== "1") {
+        x.dataset.armed = "1"; x.textContent = uses[id] ? "Tap to delete (in book)" : "Tap to delete"; tile.classList.add("armed");
+        setTimeout(() => { if (x.isConnected) { x.dataset.armed = ""; x.textContent = "×"; tile.classList.remove("armed"); } }, 3000);
+        return;
+      }
+      deletePhotos([id]);
+    });
+    tile.appendChild(x);
+    return tile;
   }));
+  const unused = ids.filter(id => !uses[id]);
+  $("phBulk").innerHTML = `${unused.length ? `<button class="btn small" type="button" id="phUnused">Delete unused photos (${unused.length})</button>` : ""}<button class="btn small danger" type="button" id="phAll">Delete all photos (${ids.length})</button>`;
+  if ($("phUnused")) armed($("phUnused"), `Delete unused photos (${unused.length})`, () => deletePhotos(unused));
+  armed($("phAll"), `Delete all photos (${ids.length})`, () => deletePhotos(ids));
 }
 $("upload").addEventListener("change", async e => {
   const files = [...(e.target.files || [])]; e.target.value = "";
@@ -2083,7 +2225,8 @@ function issues(){
   d.pages.forEach((p, pi) => {
     const G = pageGeom(p);
     G.slots.forEach((r, si) => {
-      const s = slotAt(p, si) || {}, inset = th.frame && p.layout !== "full" && !fullCover(pi, p) && !r.bare ? th.frame.width : 0;
+      if (r.hidden) return;
+      const s = slotAt(p, si) || {}, inset = frameStyle(pi, p, si, r).inset;
       if (!s.photo) out.push({ pi, kind: "empty" });
       else if (d.photos[s.photo] && printPPI(d.photos[s.photo], { w: r.w - 2 * inset, h: r.h - 2 * inset }, s) < LOW_PPI) out.push({ pi, kind: "low" });
     });
@@ -2170,13 +2313,13 @@ async function drawPage(pi, o){
     if (r.y <= e) { r.h += r.y + b; r.y = -b; }
     if (r0.x + r0.w >= W - e) r.w = W + b - r.x;
     if (r0.y + r0.h >= H - e) r.h = H + b - r.y;
-    let inset = 0;
-    if (th.frame && page.layout !== "full" && !fullCover(pi, page) && !r0.bare) {
-      inset = th.frame.width;
+    const fs = frameStyle(pi, page, si, r0), inset = fs.inset, rad = fs.radius * dpi;
+    const rr = (x, y, w, h, q) => { ctx.beginPath(); if (q > 0 && ctx.roundRect) ctx.roundRect(x, y, w, h, q); else ctx.rect(x, y, w, h); };
+    if (inset || fs.shadow) {
       ctx.save();
-      if (th.frame.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
-      ctx.fillStyle = frameColor(pi, page, si);
-      ctx.fillRect(X(r.x), X(r.y), r.w * dpi, r.h * dpi);
+      if (fs.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
+      ctx.fillStyle = inset ? fs.color : pageBg(pi, page);
+      rr(X(r.x), X(r.y), r.w * dpi, r.h * dpi, rad); ctx.fill();
       ctx.restore();
     }
     if (!slot.photo || !d.photos[slot.photo]) return;
@@ -2190,6 +2333,8 @@ async function drawPage(pi, o){
     // keep inside the photo; if bleed asks for more than there is, stretch the last bit very slightly
     if (sx < 0) { sw += sx; sx = 0; } if (sy < 0) { sh += sy; sy = 0; }
     sw = Math.min(sw, ph.w - sx); sh = Math.min(sh, ph.h - sy);
+    ctx.save();
+    if (rad > 0) { rr(X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi, Math.max(0, rad - inset * dpi)); ctx.clip(); }
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
     bmp.close();
@@ -2198,6 +2343,7 @@ async function drawPage(pi, o){
       g.addColorStop(0, hexA(bgc, wa.a)); g.addColorStop(wa.to, hexA(bgc, wa.a)); g.addColorStop(Math.min(1, wa.to + .2), hexA(bgc, 0)); g.addColorStop(1, hexA(bgc, 0));
       ctx.fillStyle = g; ctx.fillRect(X(r.x + inset), X(r.y + inset), iw * dpi, ih * dpi);
     }
+    ctx.restore();
   };
   const drawText = async (t) => {
     let txt = (page.texts[t.role] || "").trim(); if (!txt) return;
