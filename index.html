@@ -129,6 +129,9 @@ h1,h2{margin:0}
 .themes .sw{height:64px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px}
 .check{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
 .tstyle{margin:8px 0 4px; border:1px solid var(--line); border-radius:10px}
+.tfbox{border-radius:12px; padding:2px 0; transition:background .2s}
+.tfbox.tfsel{background:#F4F7FF; box-shadow:0 0 0 2px var(--blue); padding:2px 10px 6px; margin:6px -10px}
+.tfbox .tag{display:inline-block; margin-left:6px; font-size:11px; font-weight:800; color:#FFFFFF; background:var(--blue); border-radius:5px; padding:1px 6px; vertical-align:1px}
 .tstyle > summary{cursor:pointer; padding:9px 12px; font-size:13px; font-weight:600; list-style:none}
 .tstyle > summary::before{content:"▸ "; color:var(--soft)} .tstyle[open] > summary::before{content:"▾ "}
 .tstyle .body{padding:0 12px 12px}
@@ -1501,8 +1504,9 @@ function renderCtx(){
   const slot = sel && sel.s >= 0 && D().pages[sel.p] && slotAt(D().pages[sel.p], sel.s);
   if (!slot && sel && sel.t && D().pages[sel.p] && pageGeom(D().pages[sel.p]).texts.some(t => t.role === sel.t)) {
     const page = D().pages[sel.p], role = sel.t, extra = (page.extraTexts || []).some(e => e.key === role);
-    box.innerHTML = `<span class="hint">Text box: drag its blue handles, or use the arrow keys (Shift for bigger steps).</span>${arrangeBar()}${extra ? '<button class="btn small" type="button" id="cxDelText">Delete</button>' : ""}`;
+    box.innerHTML = `<span class="hint">Text box: drag its blue handles, or use the arrow keys (Shift for bigger steps).</span><button class="btn small" type="button" id="cxStyle">Font &amp; size</button>${arrangeBar()}${extra ? '<button class="btn small" type="button" id="cxDelText">Delete</button>' : ""}`;
     wireArrange(page, "t:" + role, () => duplicateText(sel.p, role));
+    $("cxStyle").onclick = () => { lastTextFocus = null; showTab("text"); };
     if ($("cxDelText")) $("cxDelText").onclick = () => { sel = null; deleteExtraText(page, role); };
     return;
   }
@@ -1660,16 +1664,24 @@ function renderPanels(){
     const G = page ? pageGeom(page) : { texts: [] };
     $("textNote").innerHTML = G.texts.length ? `Text on <b>${pageLabel(pi)}</b>. You can also type straight onto the page.` : `<b>${pageLabel(pi).replace(/^./, c => c.toUpperCase())}</b> has no text in this layout. Try <b>Photo + text</b> or <b>Text only</b> in Layouts.`;
     renderPairs(pi, page, G);
+    const focus = sel && sel.p === pi && sel.t && G.texts.some(t => t.role === sel.t) ? sel.t : null;
+    const focusKey = focus ? pi + ":" + focus : null, refocus = focusKey && focusKey !== lastTextFocus;
+    if (refocus) G.texts.forEach(t => { if (t.role === focus) openStyles.add(pi + t.role); else openStyles.delete(pi + t.role); });
+    lastTextFocus = focusKey;
+    let focusEl = null;
     $("textFields").replaceChildren(...G.texts.map(t => {
-      const w = document.createElement("div");
+      const w = document.createElement("div"); w.className = "tfbox" + (t.role === focus ? " tfsel" : "");
       const id = "tf-" + t.role;
-      w.innerHTML = `<label class="f" for="${id}">${{ title: "Title", caption: "Caption", body: "Text" }[t.role] || "Added text box"}</label>`;
+      w.innerHTML = `<label class="f" for="${id}">${{ title: "Title", caption: "Caption", body: "Text" }[t.role] || "Added text box"}${t.role === focus ? '<span class="tag">Selected</span>' : ""}</label>`;
+      if (t.role === focus) focusEl = w;
       const inp = document.createElement(t.role === "body" ? "textarea" : "input"); inp.id = id; if (inp.tagName === "INPUT") inp.type = "text";
       inp.value = page.texts[t.role] || ""; inp.placeholder = t.ph || TEXT_PH[t.role] || "Add text";
       inp.addEventListener("input", () => { page.texts[t.role] = inp.value; queueSave(); renderStage(); });
-      w.append(inp, styleControls(pi, page, t, t.role === G.texts[0].role));
+      inp.addEventListener("focus", () => { if (!sel || sel.p !== pi || sel.t !== t.role) { sel = { p: pi, s: -1, t: t.role }; lastTextFocus = pi + ":" + t.role; markSelected(); renderCtx(); w.parentNode.querySelectorAll(".tfbox").forEach(x => x.classList.toggle("tfsel", x === w)); } });
+      w.append(inp, styleControls(pi, page, t, focus ? false : t.role === G.texts[0].role));
       return w;
     }));
+    if (refocus && focusEl) requestAnimationFrame(() => focusEl.scrollIntoView({ block: "start", behavior: "smooth" }));
 
   }
   // elements
@@ -1761,6 +1773,7 @@ function styleControls(pi, page, t, open){
   return d;
 }
 const openStyles = new Set();
+let lastTextFocus = null;
 // text box designs: [key, label, make(theme, look) -> box | null, text colour to use]
 const BOX_PRESETS = [
   ["none", "None", null],
