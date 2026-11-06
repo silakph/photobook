@@ -142,6 +142,11 @@ h1,h2{margin:0}
 .tx{position:absolute; display:flex; align-items:center; outline:none; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.25; cursor:text}
 .tx > div{width:100%; outline:none; min-height:1em}
 .tx > div:empty::before{content:attr(data-ph); opacity:.38}
+.txh{position:absolute; z-index:4; width:26px; height:26px; padding:0; border-radius:50%; border:2px solid #FFFFFF; background:var(--blue); color:#FFFFFF;
+  display:none; align-items:center; justify-content:center; touch-action:none; box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.txh.mv{left:-11px; top:-11px; cursor:move} .txh.rs{right:-11px; bottom:-11px; cursor:nwse-resize}
+.editing .tx:hover .txh, .editing .tx:focus-within .txh, .editing .tx.moving .txh{display:flex}
+.editing .tx.moving{box-shadow:inset 0 0 0 2px var(--blue)}
 .editing .tx:hover{box-shadow:inset 0 0 0 1px rgba(47,91,211,.35)}
 .no-edit .tx > div:empty::before{content:none}
 .no-edit .slot .ph{background:transparent; color:transparent}
@@ -272,6 +277,7 @@ dialog::backdrop{background:rgba(28,29,33,.45)}
       </div>
       <div class="panel" id="p-text" hidden="">
         <p class="note" id="textNote"></p>
+        <div id="pairBox"></div>
         <div id="textFields"></div>
 
       </div>
@@ -378,10 +384,13 @@ const FONT_LOADS = ["800 20px 'Playfair Display'", "italic 700 20px 'Playfair Di
   "italic 500 20px 'Cormorant Garamond'", "600 20px 'Nunito'", "700 20px 'Nunito'", "800 20px 'Nunito'"];
 const fontsReady = () => Promise.all(FONT_LOADS.map(f => document.fonts.load(f).catch(() => null)));
 
-const LAYOUTS = [
-  ["one", "1 photo"], ["full", "Full-bleed"], ["two", "2 photos"], ["twoStack", "2 stacked"], ["three", "3 photos"],
-  ["four", "4 photos"], ["six", "6 photos"], ["photoText", "Photo + text"], ["text", "Text only"]
+const LAYOUT_GROUPS = [
+  ["Basics", [["one", "1 photo"], ["full", "Full-bleed"], ["two", "2 photos"], ["twoStack", "2 stacked"], ["three", "3 photos"],
+    ["four", "4 photos"], ["six", "6 photos"], ["photoText", "Photo + text"], ["text", "Text only"]]],
+  ["Grids", [["mosaic5", "Mosaic"], ["grid9", "9 grid"], ["grid8", "8 grid"], ["grid12", "12 grid"], ["cols3", "3 columns"], ["rows3", "3 rows"]]],
+  ["Magazine", [["magHero", "Hero"], ["magSplit", "Split"], ["magTop", "Story"], ["magColumn", "Column"], ["magFeature", "Feature"], ["quote", "Quote"]]]
 ];
+const LAYOUTS = LAYOUT_GROUPS.flatMap(g => g[1]);
 // front and back covers have their own set
 const COVER_LAYOUTS = [
   ["cover", "Photo + title"], ["coverFull", "Full photo"], ["coverTitleTop", "Title on top"],
@@ -395,6 +404,9 @@ function geom(layout, W, H, th){
   const R = (x, y, w, h) => ({ x, y, w, h });
   const k = Math.min(W, H) / 8; // text scales with the page
   const cap = .55 * k;
+  const gridOf = (cols, rows) => { const w = (iw - g * (cols - 1)) / cols, h = (ih - g * (rows - 1)) / rows, sl = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) sl.push(R(ix + c * (w + g), iy + r * (h + g), w, h));
+    return { slots: sl, texts: [] }; };
   const off = th.deco === "baubles" ? 1.1 * k : th.deco === "bricks" ? .45 * k : 0; // room for cover decorations at the top
   const coverText = (y) => [
     { role: "title", rect: R(ix, y, iw, ih * .2), size: 40 * k, align: "center" },
@@ -430,6 +442,35 @@ function geom(layout, W, H, th){
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) s.push(R(ix + c * (w + g), iy + r * (h + g), w, h));
       return { slots: s, texts: [] };
     }
+    case "mosaic5": { const w = (iw - 2 * g) / 3, h = (ih - 2 * g) / 3, C = (c, r, cs = 1, rs = 1) => R(ix + c * (w + g), iy + r * (h + g), w * cs + g * (cs - 1), h * rs + g * (rs - 1));
+      return { slots: [C(0, 0, 2, 2), C(2, 0), C(2, 1), C(0, 2), C(1, 2), C(2, 2)], texts: [] }; }
+    case "grid9": return gridOf(3, 3);
+    case "grid8": return W >= H ? gridOf(4, 2) : gridOf(2, 4);
+    case "grid12": return W >= H ? gridOf(4, 3) : gridOf(3, 4);
+    case "cols3": return gridOf(3, 1);
+    case "rows3": return gridOf(1, 3);
+    case "magHero": return { slots: [R(0, 0, W, H)], texts: [
+      { role: "title", rect: R(ix, H - m - 2.2 * k, iw * .82, 1.4 * k), size: 48 * k, align: "left", over: true },
+      { role: "caption", rect: R(ix, H - m - .75 * k, iw * .82, .6 * k), size: 13 * k, align: "left", over: true }] };
+    case "magSplit": { const pw = W * .56, tx = pw + g * 2.5, tw = W - tx - m; return { slots: [R(0, 0, pw, H)], texts: [
+      { role: "title", rect: R(tx, iy + ih * .06, tw, ih * .26), size: 30 * k, align: "left" },
+      { role: "body", rect: R(tx, iy + ih * .34, tw, ih * .46), size: 11.5 * k, align: "left" },
+      { role: "caption", rect: R(tx, iy + ih * .84, tw, ih * .12), size: 10 * k, align: "left" }] }; }
+    case "magTop": { const ph = H * .54, ty = ph + g * 2, rest = H - m - ty; return { slots: [R(0, 0, W, ph), R(ix + iw * .64, ty + rest * .3, iw * .36, rest * .7)], texts: [
+      { role: "title", rect: R(ix, ty, iw, rest * .26), size: 28 * k, align: "left" },
+      { role: "body", rect: R(ix, ty + rest * .3, iw * .6, rest * .7), size: 11 * k, align: "left" }] }; }
+    case "magColumn": { const cw = iw * .36, px = ix + cw + g * 1.5, pw = iw - cw - g * 1.5, h1 = (ih - g) * .6, h2 = ih - g - h1, w2 = (pw - g) / 2;
+      return { slots: [R(px, iy, pw, h1), R(px, iy + h1 + g, w2, h2), R(px + w2 + g, iy + h1 + g, w2, h2)], texts: [
+      { role: "title", rect: R(ix, iy, cw, ih * .22), size: 26 * k, align: "left" },
+      { role: "body", rect: R(ix, iy + ih * .25, cw, ih * .58), size: 11 * k, align: "left" },
+      { role: "caption", rect: R(ix, iy + ih * .86, cw, ih * .14), size: 10 * k, align: "left" }] }; }
+    case "magFeature": { const pw = iw * .62, px = ix + iw - pw, cw = iw - pw - g * 1.5; return { slots: [R(px, iy, pw, ih)], texts: [
+      { role: "title", rect: R(ix, iy + ih * .05, cw, ih * .3), size: 28 * k, align: "left" },
+      { role: "body", rect: R(ix, iy + ih * .38, cw, ih * .44), size: 11 * k, align: "left" },
+      { role: "caption", rect: R(ix, iy + ih * .86, cw, ih * .12), size: 10 * k, align: "left" }] }; }
+    case "quote": { const q = Math.min(iw, ih) * .38; return { slots: [R(ix + (iw - q) / 2, iy + ih * .06, q, q)], texts: [
+      { role: "title", rect: R(ix + iw * .06, iy + ih * .12 + q, iw * .88, ih * .32), size: 26 * k, align: "center" },
+      { role: "caption", rect: R(ix, iy + ih * .46 + q, iw, ih * .1), size: 12 * k, align: "center" }] }; }
     case "photoText": { const w = (iw - g * 2) / 2; return { slots: [R(ix, iy, w, ih)], texts: [
       { role: "title", rect: R(ix + w + g * 2, iy + ih * .22, w, ih * .2), size: 26 * k, align: "left" },
       { role: "body", rect: R(ix + w + g * 2, iy + ih * .44, w, ih * .46), size: 12.5 * k, align: "left" }] }; }
@@ -458,22 +499,34 @@ function textLook(pi, page, t){
     size: cs.size || Math.round(t.size * (page.textScale || 1) * 2) / 2,
     color: cs.color || (t.over ? "#FFFFFF" : isCover ? th.coverInk : (t.role === "title" && th.accent ? th.accent : th.ink)),
     align: cs.align || t.align, upper: !!cs.upper, spacing: cs.spacing || 0, lh: cs.lh || 1.25, over: !!t.over,
-    boldOn: weight >= w[1] && w[1] > w[0]
+    boldOn: weight >= w[1] && w[1] > w[0], box: cs.box || null
   };
 }
 const fontStr = (L, px) => `${L.italic ? "italic" : "normal"} ${L.weight} ${px}px "${L.family}"`;
+const hexA = (hex, a) => { const h = String(hex).replace("#", ""), n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
 function styleTextBox(box, L, ppi){
   Object.assign(box.style, {
     justifyContent: L.align === "center" ? "center" : L.align === "right" ? "flex-end" : "flex-start", textAlign: L.align,
     font: fontStr(L, L.size / 72 * ppi), color: L.color, textTransform: L.upper ? "uppercase" : "none",
     letterSpacing: L.spacing + "em", lineHeight: String(L.lh),
+    background: L.box && L.box.bg ? hexA(L.box.bg, L.box.bgA ?? 1) : "transparent",
+    border: "none", borderRadius: L.box ? Math.min(L.box.radius || 0, 400) / 72 * ppi + "px" : "0",
+    padding: L.box ? (L.box.pad || 0) / 72 * ppi + "px" : "0",
     textShadow: L.over ? `0 ${.02 * ppi}px ${.08 * ppi}px rgba(0,0,0,.55)` : "none"
   });
+  if (L.box && L.box.bw) box.style[L.box.under ? "borderBottom" : "border"] = `${L.box.bw / 72 * ppi}px solid ${L.box.border || L.color}`;
+}
+// the layout's frames and text boxes, with any text boxes the user has moved or resized
+function pageGeom(page){
+  const d = D(), G = geom(page.layout, d.size.w, d.size.h, TH());
+  if (page.textPos) G.texts = G.texts.map(t => page.textPos[t.role] ? { ...t, rect: { ...page.textPos[t.role] } } : t);
+  return G;
 }
 // restyle the text on the open spread without redrawing the photos
 function refreshTexts(pi){
   const el = document.querySelector(`#spread .pg[data-pi="${pi}"]`), page = D().pages[pi]; if (!el || !page) return;
-  const G = geom(page.layout, D().size.w, D().size.h, TH()), ppi = stagePPI();
+  const G = pageGeom(page), ppi = stagePPI();
   G.texts.forEach(t => { const box = el.querySelector(`.tx[data-role="${t.role}"]`); if (box) styleTextBox(box, textLook(pi, page, t), ppi); });
 }
 const TEXT_PH = { title: "Add a title", caption: "Add a caption", body: "Add some words…" };
@@ -771,7 +824,7 @@ function renderPage(pi, ppi, mode){
     el.addEventListener("dragleave", e => { if (!el.contains(e.relatedTarget)) el.classList.remove("bgdrop"); });
     el.addEventListener("drop", e => { el.classList.remove("bgdrop"); if (e.target.closest(".slot")) return; e.preventDefault(); const id = e.dataTransfer.getData("text/x-photo"); if (id && D().photos[id]) setBg(pi, id); });
   }
-  const G = geom(page.layout, W, H, th);
+  const G = pageGeom(page);
   ensureSlots(page, G.slots.length);
   if (isCover && th.deco) el.insertAdjacentHTML("beforeend", decoSVG(th.deco, W, H));
   G.slots.forEach((r, si) => {
@@ -817,8 +870,35 @@ function renderPage(pi, ppi, mode){
       tx.addEventListener("focus", () => { sel = { p: pi, s: -1 }; markSelected(); renderPanels(); });
     }
     box.appendChild(tx); el.appendChild(box);
+    if (mode === "edit") addTextHandles(box, pi, page, t, ppi);
   });
   return el;
+}
+// move (top-left) and resize (bottom-right) handles on a text box
+function addTextHandles(box, pi, page, t, ppi){
+  const mk = (cls, label, svg) => { const h = document.createElement("button"); h.type = "button"; h.className = "txh " + cls; h.setAttribute("aria-label", label); h.innerHTML = svg; box.appendChild(h); return h; };
+  const mv = mk("mv", "Move this text box", '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 1v14M1 8h14M8 1L5.5 3.5M8 1l2.5 2.5M8 15l-2.5-2.5M8 15l2.5-2.5M1 8l2.5-2.5M1 8l2.5 2.5M15 8l-2.5-2.5M15 8l-2.5 2.5"/></svg>');
+  const rs = mk("rs", "Resize this text box", '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 6v8H6M14 14L4 4"/></svg>');
+  const drag = (h, kind) => h.addEventListener("pointerdown", e => {
+    e.preventDefault(); e.stopPropagation();
+    const W = D().size.w, H = D().size.h, r0 = { ...t.rect }, sx = e.clientX, sy = e.clientY;
+    try { h.setPointerCapture(e.pointerId); } catch {}
+    sel = { p: pi, s: -1 }; markSelected(); box.classList.add("moving");
+    const move = ev => {
+      const dx = (ev.clientX - sx) / ppi, dy = (ev.clientY - sy) / ppi, r = { ...r0 };
+      if (kind === "mv") { r.x = clamp(r0.x + dx, -r0.w * .5, W - r0.w * .5); r.y = clamp(r0.y + dy, -r0.h * .5, H - r0.h * .5); }
+      else { r.w = clamp(r0.w + dx, .4, W + 1 - r0.x); r.h = clamp(r0.h + dy, .25, H + 1 - r0.y); }
+      page.textPos = page.textPos || {}; page.textPos[t.role] = r;
+      Object.assign(box.style, { left: r.x * ppi + "px", top: r.y * ppi + "px", width: r.w * ppi + "px", height: r.h * ppi + "px" });
+    };
+    const up = () => {
+      h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up);
+      box.classList.remove("moving"); t.rect = page.textPos && page.textPos[t.role] ? { ...page.textPos[t.role] } : t.rect;
+      queueSave(); renderSpreadList(); renderPanels();
+    };
+    h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
+  });
+  drag(mv, "mv"); drag(rs, "rs");
 }
 // ---- page background photo (blur + soften) ----
 const BG_MAX_BLUR = .4; // inches of blur at the slider's maximum
@@ -1097,14 +1177,16 @@ function renderPanels(){
     const isCover = isCoverPage(pi);
     $("layoutNote").innerHTML = `Pick a layout for <b>${pageLabel(pi)}</b>. Your photos move into the new frames.`;
     const W = 8, H = 8 * D().size.h / D().size.w;
-    $("layoutGrid").replaceChildren(...(isCover ? COVER_LAYOUTS : LAYOUTS).map(([key, name]) => {
+    const items = isCover ? COVER_LAYOUTS : LAYOUT_GROUPS.flatMap(([gname, list]) => [["__h", gname], ...list]);
+    $("layoutGrid").replaceChildren(...items.map(([key, name]) => {
+      if (key === "__h") { const h = document.createElement("p"); h.className = "sec-lbl"; h.style.cssText = "grid-column:1/-1; margin:6px 0 0"; h.textContent = name.toUpperCase(); return h; }
       const wrap = document.createElement("div");
       const b = document.createElement("button"); b.type = "button"; b.className = page && page.layout === key ? "on" : ""; b.setAttribute("aria-label", name);
       b.style.aspectRatio = `${W} / ${H}`;
       const G = geom(key, W, H, { ...THEMES.classic, margin: .7, gap: .3 });
       G.slots.forEach(r => b.insertAdjacentHTML("beforeend", `<i style="left:${r.x / W * 100}%; top:${r.y / H * 100}%; width:${r.w / W * 100}%; height:${r.h / H * 100}%"></i>`));
       G.texts.forEach(t => b.insertAdjacentHTML("beforeend", `<i class="t" style="left:${(t.rect.x + (t.align === "center" ? t.rect.w * .2 : 0)) / W * 100}%; top:${(t.rect.y + t.rect.h * .35) / H * 100}%; width:${t.rect.w * (t.align === "center" ? .6 : .8) / W * 100}%; height:${Math.min(t.rect.h * .3, .5) / H * 100}%"></i>`));
-      b.addEventListener("click", () => { page.layout = key; sel = null; changed(); });
+      b.addEventListener("click", () => { page.layout = key; delete page.textPos; sel = null; changed(); });
       const lab = document.createElement("small"); lab.textContent = name;
       wrap.append(b, lab); return wrap;
     }));
@@ -1117,6 +1199,7 @@ function renderPanels(){
   if (!$("p-text").hidden) {
     const G = page ? geom(page.layout, D().size.w, D().size.h, TH()) : { texts: [] };
     $("textNote").innerHTML = G.texts.length ? `Text on <b>${pageLabel(pi)}</b>. You can also type straight onto the page.` : `<b>${pageLabel(pi).replace(/^./, c => c.toUpperCase())}</b> has no text in this layout. Try <b>Photo + text</b> or <b>Text only</b> in Layouts.`;
+    renderPairs(pi, page, G);
     $("textFields").replaceChildren(...G.texts.map(t => {
       const w = document.createElement("div");
       const id = "tf-" + t.role;
@@ -1168,7 +1251,14 @@ function styleControls(pi, page, t, open){
       <input type="color" id="${id("pick")}" value="${/^#[0-9a-f]{6}$/i.test(L.color) ? L.color : "#1C1D21"}" aria-label="Pick any colour"></div>
     <div class="row"><span class="lbl">Letter spacing</span><input id="${id("ls")}" type="range" min="0" max="0.4" step="0.01" value="${L.spacing}" aria-label="Letter spacing"></div>
     <div class="row"><span class="lbl">Line spacing</span><input id="${id("lh")}" type="range" min="0.9" max="2.2" step="0.05" value="${L.lh}" aria-label="Line spacing"></div>
-    <div class="row"><button type="button" class="btn small" id="${id("reset")}">Reset to theme style</button></div>
+    <p class="sec-lbl" style="margin:14px 0 6px">TEXT BOX</p>
+    <div class="row" style="margin-top:0">${BOX_PRESETS.map(([k, n]) => `<button type="button" class="tg" data-box="${k}" aria-pressed="${boxKey(L.box) === k}">${n}</button>`).join("")}</div>
+    ${L.box ? `
+    <div class="row"><span class="lbl">Fill</span><input type="color" id="${id("bg")}" value="${L.box.bg || "#FFFFFF"}" aria-label="Box fill colour"><input id="${id("bga")}" type="range" min="0" max="1" step="0.05" value="${L.box.bg ? (L.box.bgA ?? 1) : 0}" aria-label="Box fill opacity"></div>
+    <div class="row"><span class="lbl">Border</span><input type="color" id="${id("bc")}" value="${L.box.border || (/^#[0-9a-f]{6}$/i.test(L.color) ? L.color : "#1C1D21")}" aria-label="Box border colour"><input id="${id("bw")}" type="range" min="0" max="6" step="0.25" value="${L.box.bw || 0}" aria-label="Box border width"></div>
+    <div class="row"><span class="lbl">Corners</span><input id="${id("rad")}" type="range" min="0" max="40" step="1" value="${Math.min(L.box.radius || 0, 40)}" aria-label="Rounded corners"></div>
+    <div class="row"><span class="lbl">Padding</span><input id="${id("pad")}" type="range" min="0" max="36" step="1" value="${L.box.pad || 0}" aria-label="Padding inside the box"></div>` : ""}
+    <div class="row">${page.textPos && page.textPos[role] ? `<button type="button" class="btn small" id="${id("repos")}">Reset position</button>` : ""}<button type="button" class="btn small" id="${id("reset")}">Reset to theme style</button></div>
   </div>`;
   const q = sel => d.querySelector(sel);
   q("#" + id("font")).onchange = e => { const s = st(); if (e.target.value) s.font = e.target.value; else delete s.font; delete s.bold; apply(true); renderSpreadList(); };
@@ -1184,9 +1274,76 @@ function styleControls(pi, page, t, open){
   q("#" + id("lh")).oninput = e => { st().lh = +e.target.value; apply(false); };
   [id("size"), id("ls"), id("lh")].forEach(k => q("#" + k).onchange = () => renderSpreadList());
   q("#" + id("reset")).onclick = () => { if (page.style) delete page.style[role]; apply(true); renderSpreadList(); };
+  d.querySelectorAll("[data-box]").forEach(b => b.onclick = () => {
+    const pr = BOX_PRESETS.find(x => x[0] === b.dataset.box), s = st();
+    if (!pr[2]) delete s.box; else s.box = pr[2](TH(), textLook(pi, page, t));
+    if (pr[3]) s.color = pr[3]; else if (pr[0] === "none" && (s.color === "#FFFFFF")) delete s.color;
+    apply(true); renderSpreadList();
+  });
+  const boxSet = (k, v, redraw) => { st().box = { ...(st().box || {}), [k]: v }; apply(redraw); };
+  if (q("#" + id("bg"))) {
+    q("#" + id("bg")).oninput = e => { const bx = st().box || {}; boxSet("bg", e.target.value); if (!(bx.bgA > 0)) boxSet("bgA", 1); };
+    q("#" + id("bga")).oninput = e => boxSet("bgA", +e.target.value);
+    q("#" + id("bc")).oninput = e => { boxSet("border", e.target.value); if (!(st().box.bw > 0)) boxSet("bw", 1); };
+    q("#" + id("bw")).oninput = e => boxSet("bw", +e.target.value);
+    q("#" + id("rad")).oninput = e => boxSet("radius", +e.target.value);
+    q("#" + id("pad")).oninput = e => boxSet("pad", +e.target.value);
+    [id("bg"), id("bga"), id("bc"), id("bw"), id("rad"), id("pad")].forEach(k => q("#" + k).onchange = () => { renderPanels(); renderSpreadList(); });
+  }
+  if (q("#" + id("repos"))) q("#" + id("repos")).onclick = () => { delete page.textPos[role]; if (!Object.keys(page.textPos).length) delete page.textPos; changed(); };
   return d;
 }
 const openStyles = new Set();
+// text box designs: [key, label, make(theme, look) -> box | null, text colour to use]
+const BOX_PRESETS = [
+  ["none", "None", null],
+  ["soft", "Soft", () => ({ bg: "#FFFFFF", bgA: .85, pad: 10, radius: 6 })],
+  ["dark", "Dark", () => ({ bg: "#1C1D21", bgA: .7, pad: 10, radius: 6 }), "#FFFFFF"],
+  ["outline", "Outline", (th, L) => ({ border: /^#[0-9a-f]{6}$/i.test(L.color) ? L.color : "#1C1D21", bw: 1.5, pad: 10, radius: 0 })],
+  ["banner", "Banner", th => ({ bg: th.accent, bgA: 1, pad: 10, radius: 0 }), "#FFFFFF"],
+  ["pill", "Pill", th => ({ bg: th.accent, bgA: 1, pad: 8, radius: 400 }), "#FFFFFF"],
+  ["underline", "Underline", th => ({ border: th.accent, bw: 2, under: true, pad: 4, radius: 0 })]
+];
+const boxKey = bx => !bx ? "none" : bx.under ? "underline" : bx.radius >= 400 ? "pill" : bx.bg === "#1C1D21" && !bx.bw ? "dark" : bx.bg === "#FFFFFF" && !bx.bw ? "soft" : !bx.bg && bx.bw ? "outline" : bx.bg && bx.bgA === 1 && !bx.radius && !bx.bw ? "banner" : "";
+// font pairs: one tap styles the title, text and caption together
+const FONT_PAIRS = [
+  ["Editorial", { title: { font: "Playfair Display", bold: true }, body: { font: "Lora" }, caption: { font: "Lora", italic: true } }],
+  ["Modern", { title: { font: "Montserrat", bold: true, upper: true, spacing: .12 }, body: { font: "Inter" }, caption: { font: "Inter", upper: true, spacing: .08 } }],
+  ["Romantic", { title: { font: "Pinyon Script" }, body: { font: "Cormorant Garamond" }, caption: { font: "Cormorant Garamond", italic: true } }],
+  ["Bold", { title: { font: "Bebas Neue", spacing: .06 }, body: { font: "Montserrat" }, caption: { font: "Montserrat", upper: true, spacing: .1 } }],
+  ["Playful", { title: { font: "Lilita One" }, body: { font: "Nunito" }, caption: { font: "Nunito", bold: true } }],
+  ["Handwritten", { title: { font: "Caveat" }, body: { font: "Nunito" }, caption: { font: "Caveat" } }],
+  ["Elegant", { title: { font: "Cormorant Garamond", italic: true }, body: { font: "Lora" }, caption: { font: "Cormorant Garamond", upper: true, spacing: .2 } }]
+];
+const FONT_KEYS = ["font", "bold", "italic", "upper", "spacing"];
+function applyPair(page, pair){
+  page.style = page.style || {};
+  ["title", "body", "caption"].forEach(r => {
+    const s = page.style[r] = { ...(page.style[r] || {}) };
+    FONT_KEYS.forEach(k => delete s[k]);
+    Object.assign(s, { italic: false, upper: false }, pair[r] || {}); // a pair sets the whole look, not on top of the theme's italics
+  });
+}
+function renderPairs(pi, page, G){
+  const box = $("pairBox");
+  if (!G.texts.length) { box.replaceChildren(); return; }
+  const font = (f, extra) => `font-family:'${f.font}'; ${f.bold ? "font-weight:800;" : ""} ${f.italic ? "font-style:italic;" : ""} ${f.upper ? "text-transform:uppercase;" : ""} ${f.spacing ? `letter-spacing:${f.spacing}em;` : ""} ${extra}`;
+  box.innerHTML = `<p class="sec-lbl" style="margin:4px 0 8px">FONT PAIRS</p>
+    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px">${FONT_PAIRS.map(([n, pr], i) => `
+      <button type="button" class="pair" data-i="${i}" style="text-align:left; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:#FFFFFF; display:flex; flex-direction:column; gap:2px">
+        <span style="${font(pr.title, "font-size:19px; line-height:1.1")}">Title</span>
+        <span style="${font(pr.body, "font-size:12px")}">Body text for the page</span>
+        <span style="font-size:10.5px; color:var(--soft); font-weight:600; margin-top:2px">${n}</span></button>`).join("")}</div>
+    <button type="button" class="btn small" id="pairAll" style="margin:10px 0 4px">Use this page’s fonts on every page</button>`;
+  box.querySelectorAll(".pair").forEach(b => b.onclick = () => { applyPair(page, FONT_PAIRS[+b.dataset.i][1]); changed(); });
+  $("pairAll").onclick = () => {
+    const src = page.style || {};
+    D().pages.forEach(pg => { if (pg === page) return; pg.style = pg.style || {};
+      ["title", "body", "caption"].forEach(r => { const s = pg.style[r] = { ...(pg.style[r] || {}) }; FONT_KEYS.forEach(k => delete s[k]); FONT_KEYS.forEach(k => { if (src[r] && src[r][k] !== undefined) s[k] = src[r][k]; }); });
+    });
+    changed(); $("pairAll").textContent = "Done: every page uses these fonts";
+  };
+}
 const ALIGN_ICON = Object.fromEntries(["left", "center", "right"].map(a => {
   const xs = a === "left" ? [[2, 14], [2, 10], [2, 14], [2, 9]] : a === "right" ? [[2, 14], [6, 14], [2, 14], [7, 14]] : [[2, 14], [4, 12], [2, 14], [4.5, 11.5]];
   return [a, `<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">${xs.map(([x1, x2], i) => `<line x1="${x1}" x2="${x2}" y1="${3 + i * 3.4}" y2="${3 + i * 3.4}"/>`).join("")}</svg>`];
@@ -1342,7 +1499,7 @@ async function drawPage(pi, o){
   const X = v => (v + sl + b) * dpi; // inches on the trimmed page -> canvas pixels
   ctx.fillStyle = isCover ? th.coverBg : th.bg; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi);
   if (hasBg(page)) await drawBgPhoto(ctx, page.bg, isCover ? th.coverBg : th.bg, W, H, b, X, dpi);
-  const G = geom(page.layout, W, H, th); ensureSlots(page, G.slots.length);
+  const G = pageGeom(page); ensureSlots(page, G.slots.length);
   if (isCover && th.deco) drawDeco(ctx, th.deco, W, H, X, dpi);
   for (const [si, r0] of G.slots.entries()) {
     const slot = page.slots[si];
@@ -1381,15 +1538,21 @@ async function drawPage(pi, o){
     const L = textLook(pi, page, t), size = L.size / 72 * dpi;
     if (L.upper) txt = txt.toUpperCase();
     await document.fonts.load(fontStr(L, 40)).catch(() => null);
+    let insX = 0, insY = 0;
+    if (L.box) {
+      const bx = L.box, pad = (bx.pad || 0) / 72 * dpi, bw = (bx.bw || 0) / 72 * dpi;
+      drawTextBox(ctx, bx, X(t.rect.x), X(t.rect.y), t.rect.w * dpi, t.rect.h * dpi, dpi, L.color);
+      insX = pad + (bx.under ? 0 : bw); insY = pad + bw / (bx.under ? 2 : 1);
+    }
     ctx.save();
     ctx.font = fontStr(L, size);
     ctx.fillStyle = L.color;
     if ("letterSpacing" in ctx) ctx.letterSpacing = (L.spacing * size) + "px";
     if (L.over) { ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = .08 * dpi; ctx.shadowOffsetY = .02 * dpi; }
     ctx.textBaseline = "middle"; ctx.textAlign = L.align;
-    const lines = wrapLines(ctx, txt, t.rect.w * dpi), lh = size * L.lh, total = lines.length * lh;
+    const lines = wrapLines(ctx, txt, t.rect.w * dpi - 2 * insX), lh = size * L.lh, total = lines.length * lh;
     let y = X(t.rect.y) + (t.rect.h * dpi - total) / 2 + lh / 2;
-    const x = L.align === "center" ? X(t.rect.x + t.rect.w / 2) : L.align === "right" ? X(t.rect.x + t.rect.w) : X(t.rect.x);
+    const x = L.align === "center" ? X(t.rect.x + t.rect.w / 2) : L.align === "right" ? X(t.rect.x + t.rect.w) - insX : X(t.rect.x) + insX;
     lines.forEach(l => { ctx.fillText(l, x, y); y += lh; });
     ctx.restore();
   }
@@ -1424,6 +1587,18 @@ async function drawBgPhoto(ctx, bg, base, W, H, b, X, dpi){
   } else ctx.drawImage(bmp, sx * kx, sy * ky, sw * kx, sh * ky, dx, dy, dw, dh);
   bmp.close();
   if (bg.fade) { ctx.globalAlpha = bg.fade; ctx.fillStyle = base; ctx.fillRect(X(-b), X(-b), (W + 2 * b) * dpi, (H + 2 * b) * dpi); }
+  ctx.restore();
+}
+function drawTextBox(ctx, bx, x, y, w, h, dpi, ink){
+  const r = Math.min((bx.radius || 0) / 72 * dpi, w / 2, h / 2), bw = (bx.bw || 0) / 72 * dpi;
+  const path = () => { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); };
+  ctx.save();
+  if (bx.bg) { ctx.fillStyle = hexA(bx.bg, bx.bgA ?? 1); path(); ctx.fill(); }
+  if (bw) {
+    ctx.strokeStyle = bx.border || ink;
+    if (bx.under) { ctx.fillStyle = bx.border || ink; ctx.fillRect(x, y + h - bw, w, bw); }
+    else { ctx.lineWidth = bw; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x + bw / 2, y + bw / 2, w - bw, h - bw, Math.max(0, r - bw / 2)); else ctx.rect(x + bw / 2, y + bw / 2, w - bw, h - bw); ctx.stroke(); }
+  }
   ctx.restore();
 }
 function wrapLines(ctx, text, maxW){
