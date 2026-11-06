@@ -342,10 +342,10 @@ const THEMES = {
     title: { family: "Lilita One", weight: 400, style: "normal" }, caption: { family: "Nunito", weight: 800, style: "normal" },
     body: { family: "Nunito", weight: 700, style: "normal" }, frame: { colors: ["#DA291C", "#0055BF", "#FFD100"], width: .09 }, deco: "bricks",
     sample: { bg: "#FFD100", fg: "#16181C", text: "Build!", font: "400 22px 'Lilita One'" } },
-  debut: { name: "Debut (glam blue)", bg: "#F4F6FB", coverBg: "#12306B", ink: "#12306B", coverInk: "#F3DFA8", accent: "#12306B", margin: .65, gap: .18,
+  debut: { name: "Debut (blue & cream)", bg: "#FBF6EC", coverBg: "#12306B", ink: "#12306B", coverInk: "#F6EEDC", accent: "#12306B", margin: .65, gap: .18,
     title: { family: "Pinyon Script", weight: 400, style: "normal" }, caption: { family: "Cormorant Garamond", weight: 500, style: "italic" },
-    body: { family: "Cormorant Garamond", weight: 600, style: "normal" }, frame: { color: "#C9A54C", width: .045 }, deco: "glam",
-    sample: { bg: "#12306B", fg: "#F3DFA8", text: "Eighteen", font: "400 24px 'Pinyon Script'" } },
+    body: { family: "Cormorant Garamond", weight: 600, style: "normal" }, frame: { color: "#12306B", width: .04 }, coverFrame: "#F6EEDC", deco: "glam",
+    sample: { bg: "#12306B", fg: "#F6EEDC", text: "Eighteen", font: "400 24px 'Pinyon Script'" } },
   fullbleed: { name: "Full-bleed", bg: "#FFFFFF", coverBg: "#14161B", ink: "#1C1D21", coverInk: "#FFFFFF", accent: "#1C1D21", margin: .35, gap: .08,
     title: { family: "Cormorant Garamond", weight: 500, style: "italic" }, caption: { family: "Cormorant Garamond", weight: 500, style: "italic" },
     body: { family: "Nunito", weight: 600, style: "normal" }, frame: null, deco: null, overCover: true,
@@ -409,7 +409,7 @@ const TEMPLATES = [
     desc: "A month-by-month keepsake: a page or two for each part of the year.",
     pages: ["text", "one", "four", "two", "three", "six", "photoText", "four", "two", "one", "three", "six"] },
   { key: "debut", name: "Debut", theme: "debut", size: "10x10", title: "Eighteen",
-    desc: "A glamorous blue-and-gold keepsake: the grand entrance, the 18 roses and candles, family and friends.",
+    desc: "An elegant blue-and-cream keepsake: the grand entrance, the 18 roses and candles, family and friends.",
     pages: ["full", "photoText", "four", "one", "six", "three", "photoText", "six", "two", "full", "four", "text"] },
   { key: "travel", name: "Travel", theme: "fullbleed", size: "10x10", title: "Summer by the sea",
     desc: "Edge-to-edge scenery with smaller pages for the little moments.",
@@ -422,7 +422,7 @@ function miniCover(themeKey, size, title, px){
   let html = `<div class="mini" style="width:${W * ppi}px; height:${H * ppi}px; background:${th.coverBg}">`;
   if (th.deco) html += decoSVG(th.deco, W, H);
   G.slots.forEach(r => {
-    const fr = th.frame && !th.overCover ? `border:${th.frame.width * ppi}px solid ${th.frame.colors ? th.frame.colors[0] : th.frame.color};` : "";
+    const fr = th.frame && !th.overCover ? `border:${th.frame.width * ppi}px solid ${th.coverFrame || (th.frame.colors ? th.frame.colors[0] : th.frame.color)};` : "";
     html += `<span class="ph f" style="left:${r.x * ppi}px; top:${r.y * ppi}px; width:${r.w * ppi}px; height:${r.h * ppi}px; ${fr} background:${th.overCover ? "#8F9BAE" : "#C9D0DC"}"></span>`;
   });
   const t = G.texts.find(x => x.role === "title");
@@ -649,7 +649,7 @@ function renderPage(pi, ppi, mode){
     let fx = r.x, fy = r.y, fw = r.w, fh = r.h, inset = 0;
     if (th.frame && page.layout !== "full" && !(isCover && th.overCover)) {
       inset = th.frame.width;
-      s.style.background = th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
+      s.style.background = isCover && th.coverFrame ? th.coverFrame : th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
       if (th.frame.shadow) s.style.boxShadow = `0 ${.03 * ppi}px ${.09 * ppi}px rgba(0,0,0,.18)`;
     }
     Object.assign(s.style, { left: fx * ppi + "px", top: fy * ppi + "px", width: fw * ppi + "px", height: fh * ppi + "px" });
@@ -708,10 +708,10 @@ function decoShapes(kind, W, H){
       out.push({ t: "circle", x, y: len + .08 * k + r, r, c: cols[i] });
     });
   } else if (kind === "glam") {
-    out.push({ t: "frame", x: .26 * k, y: .26 * k, w: W - .52 * k, h: H - .52 * k, c: "#C9A54C", w2: .025 * k });
-    out.push({ t: "frame", x: .36 * k, y: .36 * k, w: W - .72 * k, h: H - .72 * k, c: "#C9A54C", w2: .01 * k });
+    out.push({ t: "frame", x: .26 * k, y: .26 * k, w: W - .52 * k, h: H - .52 * k, c: "#F6EEDC", w2: .025 * k });
+    out.push({ t: "frame", x: .36 * k, y: .36 * k, w: W - .72 * k, h: H - .72 * k, c: "#F6EEDC", w2: .01 * k });
     [[.14, .11, .11], [.86, .09, .14], [.93, .2, .07], [.08, .9, .12], [.9, .88, .09], [.2, .06, .06], [.78, .95, .06]]
-      .forEach(([fx, fy, r]) => out.push({ t: "star", x: W * fx, y: H * fy, r: r * k, c: "#E7C873" }));
+      .forEach(([fx, fy, r]) => out.push({ t: "star", x: W * fx, y: H * fy, r: r * k, c: "#F6EEDC" }));
   } else if (kind === "bricks") {
     out.push({ t: "rect", x: 0, y: 0, w: W, h: .42 * k, c: "#0055BF" });
     ["#DA291C", "#FFD100", "#0055BF", "#DA291C", "#FFD100"].forEach((c, i) => out.push({ t: "rect", x: W * (.08 + i * .19), y: .42 * k, w: W * .14, h: .1 * k, c }));
@@ -1075,7 +1075,7 @@ async function drawPage(pi, o){
       inset = th.frame.width;
       ctx.save();
       if (th.frame.shadow) { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = .09 * dpi; ctx.shadowOffsetY = .03 * dpi; }
-      ctx.fillStyle = th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
+      ctx.fillStyle = isCover && th.coverFrame ? th.coverFrame : th.frame.colors ? th.frame.colors[si % th.frame.colors.length] : th.frame.color;
       ctx.fillRect(X(r.x), X(r.y), r.w * dpi, r.h * dpi);
       ctx.restore();
     }
